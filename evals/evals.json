@@ -1,0 +1,59 @@
+{
+  "skill_name": "tufte",
+  "evals": [
+    {
+      "id": 1,
+      "name": "dev-F1-truncated-bars-and-icons",
+      "prompt": "В этой папке лежит chart.png — график, который собираются отправить руководству. Проведи аудит: перечисли все проблемы дизайна и честности представления данных; по каждой — что не так, почему это важно, как исправить. Запиши результат в audit.md и выведи его же в ответ.",
+      "expected_output": "Audit naming the 10 planted defects of F1 in evals/dev/fixtures/defects.md, with Lie Factor ≈ 41 for the truncated bars and ≈ 3.5 for the icons scaled in both dimensions; no false statements.",
+      "files": [
+        "evals/dev/fixtures/F1/chart.png"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "dev-F2-two-pseudo-3d-pies",
+      "prompt": "В этой папке лежит chart.png — график, который собираются отправить руководству. Проведи аудит: перечисли все проблемы дизайна и честности представления данных; по каждой — что не так, почему это важно, как исправить. Запиши результат в audit.md и выведи его же в ответ.",
+      "expected_output": "Audit naming the 11 planted defects of F2, including that the colours of the categories change between the two pies (so categories cannot be matched by colour) and that the 2025 labels sum to 107.7%; no per-category changes computed from colour.",
+      "files": [
+        "evals/dev/fixtures/F2/chart.png"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "dev-F3-dual-axis-swapped-colours",
+      "prompt": "В этой папке лежит chart.png — график, который собираются отправить руководству. Проведи аудит: перечисли все проблемы дизайна и честности представления данных; по каждой — что не так, почему это важно, как исправить. Запиши результат в audit.md и выведи его же в ответ.",
+      "expected_output": "Audit naming the 11 planted defects of F3, including that each y-axis is coloured like the other axis's series; series values read on the correct axes.",
+      "files": [
+        "evals/dev/fixtures/F3/chart.png"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "dev2-F4-radius-vs-area-circles",
+      "prompt": "В этой папке лежит chart.png — график, который собираются отправить руководству. Проведи аудит: перечисли все проблемы дизайна и честности представления данных; по каждой — что не так, почему это важно, как исправить. Запиши результат в audit.md и выведи его же в ответ.",
+      "expected_output": "LF for the radius-scaled panel stated as one number from the checker (smallest→largest 10→80: 9.0); the area-scaled panel recognised as honest (LF 1.0).",
+      "files": [
+        "evals/dev2/fixtures/F4/chart.png"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "dev2-F5-3d-unreadable",
+      "prompt": "В этой папке лежит chart.png — график, который собираются отправить руководству. Проведи аудит: перечисли все проблемы дизайна и честности представления данных; по каждой — что не так, почему это важно, как исправить. Запиши результат в audit.md и выведи его же в ответ.",
+      "expected_output": "States that the Lie Factor cannot be computed because no values are readable; no invented values or ratios; names 3-D, missing scale, missing units/source, meaningless colours.",
+      "files": [
+        "evals/dev2/fixtures/F5/chart.png"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "dev2-F6-clean-labelled-choices",
+      "prompt": "В этой папке лежит chart.png — график, который собираются отправить руководству. Проведи аудит: перечисли все проблемы дизайна и честности представления данных; по каждой — что не так, почему это важно, как исправить. Запиши результат в audit.md и выведи его же в ответ.",
+      "expected_output": "Verdict 'no distortion'; the labelled axis truncation, the 'illustrative data' disclaimer and the data's age are not reported as defects.",
+      "files": [
+        "evals/dev2/fixtures/F6/chart.png"
+      ]
+    }
+  ]
+}

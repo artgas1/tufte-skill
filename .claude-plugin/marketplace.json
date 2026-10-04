@@ -1,0 +1,19 @@
+{
+  "name": "tufte-skill",
+  "description": "Single-plugin marketplace for tufte-skill: audit and build honest charts with Edward Tufte's principles.",
+  "owner": {
+    "name": "artgas1",
+    "url": "https://github.com/artgas1"
+  },
+  "plugins": [
+    {
+      "name": "tufte-skill",
+      "source": "./",
+      "description": "Audit and build charts for honesty with Edward Tufte's principles: Lie Factor, zero baselines, dual axes, area scaling, time axes, chartjunk.",
+      "version": "1.0.0",
+      "license": "MIT",
+      "category": "data-visualization",
+      "tags": ["tufte", "charts", "audit"]
+    }
+  ]
+}

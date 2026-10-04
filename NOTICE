@@ -1,0 +1,62 @@
+tufte-skill
+Copyright (c) 2026 artgas1 — MIT License (see LICENSE).
+
+=====================================================================
+Edward Tufte's work
+=====================================================================
+
+This repository explains Edward Tufte's principles in its own words. Quotations are brief,
+attributed to book and page, and used for commentary and instruction. They remain the property of
+their copyright holders. The books are published by Graphics Press:
+
+  - The Visual Display of Quantitative Information (2nd ed., 2001)
+  - Envisioning Information (1990)
+  - Visual Explanations (1997)
+  - Beautiful Evidence (2006)
+  - The Cognitive Style of PowerPoint (2nd ed., 2006)
+  - Seeing with Fresh Eyes (2020)
+
+This project is not affiliated with or endorsed by Edward Tufte or Graphics Press.
+
+=====================================================================
+Material derived from jpoindexter/tufte-skills (MIT)
+=====================================================================
+
+Source: https://github.com/jpoindexter/tufte-skills, commit 9f4c602 (2026-07-29).
+
+No file and no passage of text was copied verbatim from that repository. The following parts of
+this repository were derived from it: we read its 39 skill files, extracted their factual claims,
+checked each claim against the books (and primary sources for non-Tufte facts), and kept only
+the claims that matched, rewritten in our own words.
+
+  1. skills/tufte/references/canon.md, "Graphical integrity": the selection of measured Lie Factor
+     cases (9.4, 9.5, 2.8, 59.4) and the perceived-area exponent (.8 ± .3).
+  2. skills/tufte/references/canon.md, "Data-ink and chartjunk": the selection of the range-frame,
+     quartile plot, dot-dash-plot and table-graphic (slopegraph) references.
+  3. skills/tufte/references/canon.md, "Not Tufte" and "Known slips to avoid when citing": these
+     lists record attribution and number errors we found while fact-checking that repository
+     (Pugin vs. Venturi, Tukey, Bateson, Vauthier, the Nature/NEJM table, Begley & Ellis).
+
+The MIT license of that work:
+
+  MIT License
+
+  Copyright (c) 2026 Jason Poindexter
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.

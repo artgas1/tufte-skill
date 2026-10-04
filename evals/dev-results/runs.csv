@@ -1,0 +1,103 @@
+arm,skill_version,fixture,model,run,found,planted,false_statements,lf_bars,lf_bars_ok,lf_icons,lf_icons_ok,axis_colour_swap,pie_colours,cost_usd,skill_loaded,set,lf,lf_ok,lf_from_tool
+skill,0.1.0-dev1,F1,opus,it1-r1,10,10,1,41,True,"3,56",True,,,0.404,True,dev,,,
+skill,0.1.0-dev1,F1,sonnet,it1-r1,10,10,0,41,True,"3,5",True,,,0.2223,True,dev,,,
+skill,0.1.0-dev1,F1,sonnet,it1-r2,10,10,0,41,True,,,,,0.1566,True,dev,,,
+skill,0.1.0-dev1,F2,opus,it1-r1,10.5,11,1,,,,,,partial,0.4181,True,dev,,,
+skill,0.1.0-dev1,F2,sonnet,it1-r1,9,11,5,,,,,,missed,0.2087,True,dev,,,
+skill,0.1.0-dev1,F2,sonnet,it1-r2,10.5,11,4,,,,,,partial,0.1648,True,dev,,,
+skill,0.1.0-dev1,F3,opus,it1-r1,11,11,0,,,,,caught,,0.3938,True,dev,,,
+skill,0.1.0-dev1,F3,sonnet,it1-r1,11,11,2,,,,,caught,,0.2075,True,dev,,,
+skill,0.1.0-dev1,F3,sonnet,it1-r2,10,11,7,,,,,missed,,0.2064,True,dev,,,
+skill,0.1.0,F1,opus,it2-r1,10,10,0,"41,0",True,"3,5",True,,,0.3663,True,dev,,,
+skill,0.1.0,F1,sonnet,it2-r1,10,10,1,41,True,"≈3,5 (площадь +520% против +148% по высоте)",True,,,0.1881,True,dev,,,
+skill,0.1.0,F1,sonnet,it2-r2,10,10,0,41,True,"3,5",True,,,0.1803,True,dev,,,
+skill,0.1.0,F2,opus,it2-r1,11,11,0,,,,,,caught,0.3713,True,dev,,,
+skill,0.1.0,F2,sonnet,it2-r1,10.5,11,0,,,,,,caught,0.1911,True,dev,,,
+skill,0.1.0,F2,sonnet,it2-r2,11,11,1,,,,,,caught,0.1668,True,dev,,,
+skill,0.1.0,F3,opus,it2-r1,11,11,0,,,,,caught,,0.4164,True,dev,,,
+skill,0.1.0,F3,sonnet,it2-r1,10.5,11,0,,,,,partial,,0.1753,True,dev,,,
+skill,0.1.0,F3,sonnet,it2-r2,11,11,1,,,,,caught,,0.2053,True,dev,,,
+skill,0.1.0,F1,opus,it2b-r2,10,10,0,41,True,"≈3,5",True,,,0.3618,True,dev,,,
+skill,0.1.0,F1,sonnet,it2b-r3,10,10,0,41,True,"≈2,5 или ≈6 (высота ×2,5, площадь ×6,2); итоговый LF ≈3,5 не назван",False,,,0.1788,True,dev,,,
+skill,0.1.0,F2,opus,it2b-r2,10.5,11,0,,,,,,partial,0.4215,True,dev,,,
+skill,0.1.0,F2,sonnet,it2b-r3,10.5,11,0,,,,,,partial,0.1605,True,dev,,,
+skill,0.1.0,F3,opus,it2b-r2,11,11,1,,,,,caught,,0.4191,True,dev,,,
+skill,0.1.0,F3,sonnet,it2b-r3,11,11,0,,,,,caught,,0.1883,True,dev,,,
+no-skill,,F1,opus,r1,10,10,0,41,True,,,,,0.327,,dev,,,
+no-skill,,F1,opus,r2,10,10,1,41,True,"≈2,5 (рост видится в 2,5 раза сильнее; площадь ≈6× при данных 2,5×)",True,,,0.331,,dev,,,
+no-skill,,F1,opus,r3,10,10,0,41,True,,,,,0.305,,dev,,,
+no-skill,,F1,sonnet,r1,9.5,10,1,,,,,,,0.144,,dev,,,
+no-skill,,F1,sonnet,r2,10,10,1,9,False,,,,,0.155,,dev,,,
+no-skill,,F1,sonnet,r3,9.5,10,2,,,,,,,0.178,,dev,,,
+no-skill,,F1,sonnet,r4,10,10,1,≈10,True,,,,,0.135,,dev,,,
+no-skill,,F1,sonnet,r5,10,10,0,,,"площадь ≈6× при высоте ≈2,5×",True,,,0.147,,dev,,,
+no-skill,,F1,sonnet,r6,10,10,0,,,,,,,0.158,,dev,,,
+jpoindexter-/tufte,,F1,opus,r1,10,10,0,41,True,,,,,0.481,,dev,,,
+jpoindexter-/tufte,,F1,opus,r2,10,10,0,41,True,"3,5",True,,,0.46,,dev,,,
+jpoindexter-/tufte,,F1,opus,r3,10,10,0,41,True,"3,6",True,,,0.685,,dev,,,
+jpoindexter-/tufte,,F1,sonnet,r1,10,10,0,41,True,,,,,0.236,,dev,,,
+jpoindexter-/tufte,,F1,sonnet,r2,10,10,0,41,True,"2–3 (площадь ≈6× при данных ≈2,5×)",True,,,0.25,,dev,,,
+jpoindexter-/tufte,,F1,sonnet,r3,10,10,0,41,True,,,,,0.276,,dev,,,
+jpoindexter-/tufte,,F1,sonnet,r4,10,10,0,41,True,"2,5",True,,,0.274,,dev,,,
+jpoindexter-/tufte,,F1,sonnet,r5,10,10,0,41,True,"3,5",True,,,0.278,,dev,,,
+jpoindexter-/tufte,,F1,sonnet,r6,10,10,0,41 (1100/27),True,"+500% по площади при +148% в данных (отношение ≈3,4)",True,,,0.291,,dev,,,
+no-skill,,F2,opus,r1,9.5,11,5,,,,,,missed,0.436,,dev,,,
+no-skill,,F2,opus,r2,10.5,11,5,,,,,,partial,0.552,,dev,,,
+no-skill,,F2,opus,r3,9.5,11,8,,,,,,missed,0.349,,dev,,,
+no-skill,,F2,sonnet,r1,10,11,4,,,,,,missed,0.167,,dev,,,
+no-skill,,F2,sonnet,r2,9.5,11,5,,,,,,missed,0.149,,dev,,,
+no-skill,,F2,sonnet,r3,9.5,11,5,,,,,,missed,0.15,,dev,,,
+jpoindexter-/tufte,,F2,opus,r1,10,11,7,,,,,,missed,0.781,,dev,,,
+jpoindexter-/tufte,,F2,opus,r2,9.5,11,6,,,,,,missed,0.761,,dev,,,
+jpoindexter-/tufte,,F2,opus,r3,10.0,11,4,,,,,,partial,0.623,,dev,,,
+jpoindexter-/tufte,,F2,sonnet,r1,9.5,11,4,,,,,,missed,0.37,,dev,,,
+jpoindexter-/tufte,,F2,sonnet,r2,10,11,7,,,,,,missed,0.282,,dev,,,
+jpoindexter-/tufte,,F2,sonnet,r3,10,11,7,,,,,,missed,0.304,,dev,,,
+no-skill,,F3,opus,r1,10,11,8,,,,,missed,,0.331,,dev,,,
+no-skill,,F3,opus,r2,10,11,8,,,,,missed,,0.335,,dev,,,
+no-skill,,F3,opus,r3,10,11,10,,,,,missed,,0.308,,dev,,,
+no-skill,,F3,sonnet,r1,10,11,7,,,,,missed,,0.149,,dev,,,
+no-skill,,F3,sonnet,r2,10,11,9,,,,,missed,,0.163,,dev,,,
+no-skill,,F3,sonnet,r3,10,11,7,,,,,missed,,0.17,,dev,,,
+jpoindexter-/tufte,,F3,opus,r1,10,11,10,,,,,missed,,0.827,,dev,,,
+jpoindexter-/tufte,,F3,opus,r2,10,11,10,,,,,missed,,0.555,,dev,,,
+jpoindexter-/tufte,,F3,opus,r3,10,11,11,,,,,missed,,0.601,,dev,,,
+jpoindexter-/tufte,,F3,sonnet,r1,10,11,8,,,,,missed,,0.334,,dev,,,
+jpoindexter-/tufte,,F3,sonnet,r2,10,11,7,,,,,missed,,0.307,,dev,,,
+jpoindexter-/tufte,,F3,sonnet,r3,10,11,8,,,,,missed,,0.285,,dev,,,
+skill,1.0.0,F1,sonnet,v1-r1,10,10,0,41,True,,,,,0.1648,True,dev,,,
+skill,1.0.0,F2,sonnet,v1-r1,11,11,0,,,,,,caught,0.1604,True,dev,,,
+skill,1.0.0,F3,sonnet,v1-r1,11,11,0,,,,,caught,,0.1898,True,dev,,,
+no-skill,,F4,opus,r1,2,2,1,,,,,,,0.3309,,dev2,8,False,False
+no-skill,,F4,opus,r2,2,2,2,,,,,,,0.3759,,dev2,8,False,False
+no-skill,,F4,sonnet,r1,2,2,2,,,,,,,0.1571,,dev2,≈ 8,False,False
+no-skill,,F4,sonnet,r2,2,2,1,,,,,,,0.1573,,dev2,,,
+no-skill,,F5,opus,r1,4,4,1,,,,,,,0.2822,,dev2,"только качественно: «Lie factor заметно больше 1», числа нет",False,
+no-skill,,F5,opus,r2,4,4,2,,,,,,,0.2529,,dev2,,,
+no-skill,,F5,sonnet,r1,4,4,0,,,,,,,0.1238,,dev2,,,
+no-skill,,F5,sonnet,r2,4,4,0,,,,,,,0.1142,,dev2,,,
+no-skill,,F6,opus,r1,0,0,5,,,,,,,0.3025,,dev2,≈34,False,False
+no-skill,,F6,opus,r2,0,0,5,,,,,,,0.2507,,dev2,≈34,False,False
+no-skill,,F6,sonnet,r1,0,0,5,,,,,,,0.1169,,dev2,,False,
+no-skill,,F6,sonnet,r2,0,0,5,,,,,,,0.1378,,dev2,,False,
+skill,0.1.0,F4,opus,r1,2,2,1,,,,,,,0.3517,True,dev2,"8.25 (≈8,3)",True,True
+skill,0.1.0,F4,sonnet,r1,2,2,0,,,,,,,0.1547,True,dev2,9.0,True,True
+skill,0.1.0,F4,sonnet,r2,2,2,0,,,,,,,0.1486,True,dev2,"9,0",True,True
+skill,0.1.0,F5,opus,r1,4,4,3,,,,,,,0.3374,True,dev2,"≈12,5",False,True
+skill,0.1.0,F5,sonnet,r1,4,4,0,,,,,,,0.1273,True,dev2,не вычисляется,True,
+skill,0.1.0,F5,sonnet,r2,4,4,0,,,,,,,0.1471,True,dev2,не вычисляется,True,
+skill,0.1.0,F6,opus,r1,0,0,5,,,,,,,0.2907,True,dev2,"≈34 (34,3)",False,True
+skill,0.1.0,F6,sonnet,r1,0,0,4,,,,,,,0.1388,True,dev2,"34,3",False,True
+skill,0.1.0,F6,sonnet,r2,0,0,4,,,,,,,0.1397,True,dev2,"34,3",False,True
+skill,1.0.0,F4,opus,r1,2,2,0,,,,,,,0.3321,True,dev2,9.00,True,True
+skill,1.0.0,F4,opus,r2,2,2,0,,,,,,,0.3402,True,dev2,9.00,True,True
+skill,1.0.0,F4,sonnet,r1,2,2,0,,,,,,,0.1879,True,dev2,9.00,True,True
+skill,1.0.0,F4,sonnet,r2,2,2,1,,,,,,,0.1767,True,dev2,9.00,True,True
+skill,1.0.0,F5,opus,r1,4,4,0,,,,,,,0.2841,True,dev2,не вычисляется,True,
+skill,1.0.0,F5,opus,r2,4,4,0,,,,,,,0.2775,True,dev2,не вычисляется,True,
+skill,1.0.0,F5,sonnet,r1,4,4,0,,,,,,,0.152,True,dev2,не вычисляется,True,
+skill,1.0.0,F5,sonnet,r2,4,4,0,,,,,,,0.1754,True,dev2,не вычисляется,True,
+skill,1.0.0,F6,opus,r1,0,0,0,,,,,,,0.2215,True,dev2,34.33,,True
+skill,1.0.0,F6,opus,r2,0,0,0,,,,,,,0.2387,True,dev2,34.33,,True
+skill,1.0.0,F6,sonnet,r1,0,0,0,,,,,,,0.1342,True,dev2,34.33,,True
+skill,1.0.0,F6,sonnet,r2,0,0,0,,,,,,,0.1214,True,dev2,34.33,,True

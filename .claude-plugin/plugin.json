@@ -1,0 +1,13 @@
+{
+  "name": "tufte-skill",
+  "version": "1.0.0",
+  "description": "Audit and build charts for honesty with Edward Tufte's principles: Lie Factor, zero baselines, dual axes, area scaling, time axes, chartjunk. Deterministic checks plus a compact rubric.",
+  "author": {
+    "name": "artgas1",
+    "url": "https://github.com/artgas1"
+  },
+  "homepage": "https://github.com/artgas1/tufte-skill",
+  "repository": "https://github.com/artgas1/tufte-skill",
+  "license": "MIT",
+  "keywords": ["tufte", "charts", "data-visualization", "lie-factor", "chartjunk", "audit", "matplotlib", "plotly", "vega-lite"]
+}

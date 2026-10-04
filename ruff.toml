@@ -1,0 +1,2 @@
+# Scripts support Python 3.9+ (see skills/tufte/scripts/tufte_check.py).
+target-version = "py39"
