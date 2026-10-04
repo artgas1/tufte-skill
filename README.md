@@ -69,6 +69,9 @@ or in `.claude/settings.json`:
 }
 ```
 
+To pin a release, add `"ref": "tufte-skill--v1.0.0"` next to `"repo"`. Settings alone register
+the marketplace; run `claude plugin install tufte-skill@tufte-skill` once to install the plugin.
+
 **As a plain skill**: copy `skills/tufte/` to `~/.claude/skills/tufte/`.
 
 Requirements: Python ≥ 3.9 with numpy and matplotlib for the `image`, `blobs` and `figure` commands
@@ -102,17 +105,17 @@ Three arms, all on the same prompt (which does not mention any skill), fixtures 
 environment, which includes a built-in palette/form skill), and **jpoindexter `/tufte`** (that
 collection's router, invoked explicitly). Runs of 2026-10-04; version 0.1.0.
 
-| Sonnet | n (F1/F2/F3) | defects found | false statements / audit | Lie Factor correct (bars / icons) | swapped axis colours caught | pie colours reassigned caught | cost / audit |
+| Sonnet | n (F1/F2/F3) | defects found | false statements / audit | Lie Factor correct (bars / icons) | swapped axis colours caught | pie colours reassigned caught | cost vs no skill |
 |---|---|---|---|---|---|---|---|
-| this skill | 3/3/3 | 98.5% | 0.33 | 3/3 · 2/3 | 2 + 1 partial / 3 | 2 + 1 partial / 3 | $0.182 |
-| no skill | 6/3/3 | 92.4% | 4.39 | 1/6 · 1/6 | 0/3 | 0/3 | $0.156 |
-| jpoindexter `/tufte` | 6/3/3 | 93.4% | 4.56 | 6/6 · 4/6 | 0/3 | 0/3 | $0.298 |
+| this skill | 3/3/3 | 98.5% | 0.33 | 3/3 · 2/3 | 2 + 1 partial / 3 | 2 + 1 partial / 3 | ×1.16 |
+| no skill | 6/3/3 | 92.4% | 4.39 | 1/6 · 1/6 | 0/3 | 0/3 | ×1.00 |
+| jpoindexter `/tufte` | 6/3/3 | 93.4% | 4.56 | 6/6 · 4/6 | 0/3 | 0/3 | ×1.9 |
 
-| Opus | n (F1/F2/F3) | defects found | false statements / audit | Lie Factor correct (bars / icons) | swapped axis colours caught | pie colours reassigned caught | cost / audit |
+| Opus | n (F1/F2/F3) | defects found | false statements / audit | Lie Factor correct (bars / icons) | swapped axis colours caught | pie colours reassigned caught | cost vs no skill |
 |---|---|---|---|---|---|---|---|
-| this skill | 2/2/2 | 99.2% | 0.17 | 2/2 · 2/2 | 2/2 | 1 + 1 partial / 2 | $0.393 |
-| no skill | 3/3/3 | 93.4% | 5.00 | 3/3 · 1/3 | 0/3 | 0 + 1 partial / 3 | $0.364 |
-| jpoindexter `/tufte` | 3/3/3 | 93.4% | 5.33 | 3/3 · 2/3 | 0/3 | 0 + 1 partial / 3 | $0.642 |
+| this skill | 2/2/2 | 99.2% | 0.17 | 2/2 · 2/2 | 2/2 | 1 + 1 partial / 2 | ×1.08 |
+| no skill | 3/3/3 | 93.4% | 5.00 | 3/3 · 1/3 | 0/3 | 0 + 1 partial / 3 | ×1.00 |
+| jpoindexter `/tufte` | 3/3/3 | 93.4% | 5.33 | 3/3 · 2/3 | 0/3 | 0 + 1 partial / 3 | ×1.8 |
 
 Differences (bootstrap stratified by fixture, 95% CI):
 
@@ -178,6 +181,11 @@ seen (criteria in `ACCEPTANCE.md`):
 | A5, cost ×1.12–1.13 | Passed |
 | A6, auto-loading 45/45 | Passed |
 
+On the same held-out set (Sonnet), jpoindexter `/tufte` found no more defects than no skill
+(+0.0 pp vs +1.6 pp for this skill), stated a correct Lie Factor in 8/18 runs (this skill:
+11/18) and cost ×1.7 of this skill per audit. That set was retired after its failure analysis
+was read, because the analysis exposed its contents.
+
 The failures fell into four classes:
 1. a Lie Factor worked out by hand instead of with the checker;
 2. size encodings described only in words ("≈16× by area");
@@ -207,16 +215,62 @@ Opus: 1).
 | 3: unreadable values (F5) | false statements / audit — Sonnet / Opus | 0 · 1.5 | 0 · 3.0 | 0 · 0 |
 | 4: clean chart (F6) | false statements / audit — Sonnet / Opus | 5.0 · 5.0 | 4.0 · 5.0 | 0 · 0 |
 | all | planted defects found (F4, F5) | 100% | 100% | 100% |
-| all | cost / audit — Sonnet / Opus | $0.13 · $0.30 | $0.14 · $0.33 | $0.16 · $0.28 |
+| all | cost vs no skill — Sonnet / Opus | ×1.00 · ×1.00 | ≈×1.1 · ≈×1.1 | ≈×1.2 · ≈×0.9 |
 
 Development set 2 was used to tune 1.0.0, so these numbers are optimistic too.
 
-**Held-out set — version 1.0.0.** _Pending: a new held-out set is being prepared by someone
-other than the author; results will be added after that acceptance run._
+**Held-out set 2 — version 1.0.0.** A new set prepared independently, never seen by the skill
+author: 8 charts with 54 planted defects (5 with a reference Lie Factor, one of them on purpose
+"cannot be computed"), 3 clean charts carrying labelled deliberate choices (annotated axis break,
+labelled log scale, "illustrative data", dated past-year data) and 2 build tasks. Defect lists and
+reference values were written before rendering; the set and the candidate were checksummed and
+did not change during the runs. `ACCEPTANCE.md` was verified byte-identical to its pre-rework copy.
+126 runs, none invalid.
 
-**Limitations.** Few repetitions per arm; synthetic charts; one judge model per batch; only
-image-input audits were benchmarked end-to-end (the `figure`/`spec` checks are covered by unit
-tests, not by agent runs).
+| Criterion | Sonnet (3 runs per chart) | Opus (2 runs per chart) |
+|---|---|---|
+| A1 defects found, skill / no skill | 99.0% / 96.1% (+2.9 pp, CI 0…+6.3) — met | 100% / 100% — met |
+| A2 false statements on clean charts | 2.0 / 5.3 (−3.3, CI −4.3…−2.3) — met | 1.0 / 4.0 (−3.0, CI −4.0…−2.2) — met |
+| A3 Lie Factor within ±10% (numeric references) | 9/12 = 75% (no skill 0/12) — **not met** | 6/8 = 75% (no skill 1/8) — **not met** |
+| A3 incl. the "cannot be computed" reference | 12/15 = 80% (no skill 0/15) | 8/10 = 80% (no skill 3/10) |
+| A4 swapped axis colours caught | 6/6 — met | 4/4 — met |
+| A5 cost vs no skill | ×1.07 — met | ×1.13 — met |
+| A6 auto-loading | 33/33 — met | 22/22 — met |
+
+A3 per chart: on four of the five Lie Factor charts the skill was right in every run; on the
+fifth — a truncated axis with several series — it was right in none (0/5), so the per-chart
+condition of A3 is not met. There it computed a correct LF for each series, but not for the
+extreme pair across series that the reference uses. **By the letter of `ACCEPTANCE.md`, 1.0.0
+does not pass A3; it is released with this result stated.** Opus had 2 runs per chart, not the 3
+that `ACCEPTANCE.md` asks for.
+
+Also on this set:
+- every Lie Factor the skill stated was quoted from the checker's output: 20/20 (no skill: 0/11);
+- one category drawn in two colours: Sonnet 6/6 vs 3/6 without the skill; Opus 4/4 vs 4/4;
+- false statements on charts with planted defects: no detectable difference (Sonnet −0.38,
+  CI −0.92…+0.17; Opus +0.38, CI −0.19…+1.06);
+- build tasks, rubric score: Sonnet 1.00 vs 0.925; Opus 1.00 vs 0.975.
+
+**Judging.** A blind judge (Sonnet) scored all runs; audits were relabelled and skill names
+masked. Opus re-judged the Lie Factor charts as a cross-check: 264/264 defect verdicts agreed,
+36/40 Lie Factor verdicts agreed (all four disagreements in no-skill runs). Differences are
+bootstrap estimates over chart × run with 95% CIs.
+
+**Known limitations.**
+- Truncated axis with several series: the LF is computed per series, not for the most extreme
+  pair across series. Planned for 1.1.
+- Some labelled, deliberate choices still draw comments ("illustrative data" called unfit for
+  decisions, a labelled log scale called misleading): 1–2 false statements per clean chart.
+- Values misread from images (segment sizes, gauge thresholds) still produce wrong statements;
+  they do not affect the Lie Factor, which needs readable or measured values.
+- On one clean dot plot, Opus took the guide lines for a length encoding and computed an LF where
+  none applies (2 of 2 Opus runs; Sonnet: "LF not applicable").
+- Synthetic charts, few runs per cell, one primary judge model.
+
+**Script and spec inputs.** Besides the unit tests, the `figure` and `spec` paths were exercised in
+8 agent runs (Sonnet) on three development inputs — a matplotlib script, a Vega-Lite spec and a
+Plotly figure: the skill loaded and called the right command in 8/8 runs and every planted defect
+was found. These inputs are not part of a held-out set.
 
 ## Relationship to jpoindexter/tufte-skills
 
