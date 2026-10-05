@@ -811,3 +811,50 @@ def test_cvd_red_green_confused_for_deutan_blue_orange_distinct():
     assert rb.severity == "INFO" and tc.contrast_findings("#b2182b", "#1b5e9e")[0].data["ratio"] < 1.1
     grey = tc.simulate_cvd(tc.parse_colour("#777777"), "deutan")
     assert _near(tc.hexc(grey), "#777777", 2)
+
+
+# ------------------------------------------------------------------ v1.4.1: the deterministic colour block
+
+
+def _bars_chart(path, colours, footnote_colour):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(6, 4), dpi=110)
+    for i, c in enumerate(colours):
+        ax.bar([i], [10 + 5 * i], color=c, width=0.6)
+    ax.set_xticks(range(len(colours)), [f"Канал {i + 1}" for i in range(len(colours))])
+    ax.set_title("Выручка по каналам, 2025")
+    fig.text(0.01, 0.01, "Источник: учёт продаж за 2025 год", fontsize=8, color=footnote_colour)
+    fig.savefig(path)
+    plt.close(fig)
+    return str(path)
+
+
+def test_colour_block_lists_problems_with_numbers(tmp_path):
+    p = _bars_chart(tmp_path / "bad.png", ["#1b3a6b", "#d62728", "#2ca02c"], "#999999")
+    f = tc.colourcheck_findings(p)[0]
+    assert f.check == "colour-block" and f.severity == "WARN"
+    text = [t for t in f.data["text"] if _near(t[0], "#999999", 12)]
+    assert text and abs(text[0][1] - 2.85) / 2.85 < 0.05 and "below WCAG AA" in f.message
+    pair = next(p for p in f.data["pairs"] if {_near(p[0], "#d62728", 8), _near(p[1], "#2ca02c", 8)} == {True}
+                or {_near(p[1], "#d62728", 8), _near(p[0], "#2ca02c", 8)} == {True})
+    assert pair[3] == "deutan" and pair[4] < tc.CVD_CONFUSED and "deutan ΔE" in f.message
+
+
+def test_colour_block_is_empty_on_a_clean_chart(tmp_path):
+    p = _bars_chart(tmp_path / "ok.png", ["#08306b", "#e6550d"], "#555555")
+    f = tc.colourcheck_findings(p)[0]
+    assert f.severity == "INFO" and f.message.startswith("Colour & contrast findings: none")
+
+
+def test_colour_block_ignores_grid_fragments_and_shades_of_one_hue(tmp_path):
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure(figsize=(6, 4), dpi=110)
+    ax = fig.add_subplot(projection="3d")
+    ax.bar3d([0, 1, 2], [0, 0, 0], [0, 0, 0], 0.5, 0.5, [3, 4, 5], color="#1b3a6b", shade=True)
+    p = tmp_path / "shade.png"
+    fig.savefig(p)
+    plt.close(fig)
+    f = tc.colourcheck_findings(str(p))[0]
+    assert "Text" not in f.message and "Mark colours" not in f.message, f.message

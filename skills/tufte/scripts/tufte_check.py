@@ -14,6 +14,7 @@ Subcommands
   colours The solid colours drawn in a PNG/JPG or a pixel box of it (edge mixtures removed).
   pick    The colour of one element (text, line, fill) in a pixel box and its contrast, or "not determined".
   cvd     Two colours as readers with protan/deutan/tritan deficiency see them: ΔE and a verdict.
+  colourcheck  The colour & contrast findings block for an image: only failures, ready to paste.
   figure  Run a matplotlib script under the Agg backend and inspect every figure it builds.
   spec    Inspect a Vega-Lite spec or a Plotly figure JSON.
 
@@ -553,6 +554,10 @@ def hexc(rgb) -> str:
 
 
 def image_findings(path: str) -> list[Finding]:
+    return _image_findings(path) + colourcheck_findings(path)
+
+
+def _image_findings(path: str) -> list[Finding]:
     import numpy as np
 
     rgb = _load_rgb(path)
@@ -763,6 +768,156 @@ def _components(mask) -> list[list[tuple[int, int]]]:
                         stack.append((ny, nx))
             comps.append(comp)
     return comps
+
+
+COLOUR_BLOCK_TITLE = "Colour & contrast findings"
+
+
+def _ratio(a, b) -> float:
+    la, lb = relative_luminance(a), relative_luminance(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+def _hue_gap(a, b) -> float:
+    ha = colorsys.rgb_to_hsv(*a)[0] * 360
+    hb = colorsys.rgb_to_hsv(*b)[0] * 360
+    d = abs(ha - hb) % 360
+    return min(d, 360 - d)
+
+
+def colourcheck_findings(path: str) -> list[Finding]:
+    """The only colour statements an audit may make, computed from the picture.
+
+    Text: glyph-sized ink blobs grouped by their core colour; a group of varied shapes is text, and its
+    contrast against the background is checked against WCAG AA (4.5:1). Marks: larger ink blobs; each
+    chromatic mark colour is checked against the background (3:1, WCAG 1.4.11), and every pair of mark
+    colours of different hue is checked for grayscale separation (3:1 between them) and for colour-vision
+    deficiency (worst ΔE of protan/deutan/tritan ≥ 10). Only failures are listed, so a clean chart gives
+    an empty block. Shades of one hue (the faces of a 3-D bar, a light and a dark tint) are not compared.
+    """
+    import numpy as np
+
+    px, _ = _box_pixels(path, None)
+    flat = px.reshape(-1, 3)
+    vals, cnt = np.unique(flat, axis=0, return_counts=True)
+    bg = vals[int(np.argmax(cnt))].astype(float)
+    bgc = (float(bg[0]) / 255, float(bg[1]) / 255, float(bg[2]) / 255)
+    dist = np.abs(px.astype(float) - bg).max(axis=2)
+    ink = dist > 40
+    comps = _components(ink)
+    texts: list[tuple[np.ndarray, tuple[int, int, float, int, int]]] = []
+    marks: list[tuple[np.ndarray, int]] = []
+    for comp in comps:
+        if len(comp) < 4:
+            continue
+        ys = np.array([p[0] for p in comp])
+        xs = np.array([p[1] for p in comp])
+        ch, cw = int(ys.max() - ys.min() + 1), int(xs.max() - xs.min() + 1)
+        d = dist[ys, xs]
+        core = px[ys[d >= np.quantile(d, 0.9)], xs[d >= np.quantile(d, 0.9)]].astype(float)
+        colour = np.median(core, axis=0)
+        if ch <= 24 and cw <= 24:
+            texts.append((colour, (ch, cw, float(ys.mean()), int(xs.min()), int(xs.max()))))
+            continue
+        # a mark blob may join several marks (bars standing on one axis line): take every flat colour in it,
+        # drop anti-aliased edge steps (a blend of the background and a flat colour with no more pixels than it),
+        # and fall back to the most intense pixels for a gradient (no flat colour at all)
+        cols, ccount = np.unique(px[ys, xs], axis=0, return_counts=True)
+        need = max(40, int(0.03 * len(comp)))
+        flat_cols = [(cols[k].astype(float), int(ccount[k])) for k in np.argsort(-ccount) if ccount[k] >= need]
+        kept = [(c, n) for c, n in flat_cols
+                if not any(_is_blend(c, bg, c2) and n <= 1.5 * n2 and float(np.abs(c2 - bg).max()) > float(np.abs(c - bg).max())
+                           for c2, n2 in flat_cols)]
+        if kept:
+            marks += kept
+        else:
+            marks.append((colour, len(comp)))
+
+    def group(items, tol):
+        groups: list[dict] = []
+        for colour, extra in items:
+            for g in groups:
+                if float(np.abs(g["c"] - colour).max()) <= tol:
+                    g["members"].append((colour, extra))
+                    break
+            else:
+                groups.append({"c": colour, "members": [(colour, extra)]})
+        for g in groups:
+            g["c"] = np.median(np.array([m[0] for m in g["members"]]), axis=0)
+        return groups
+
+    lines: list[str] = []
+    data: dict = {"text": [], "marks": [], "pairs": []}
+    for g in group(texts, 28):
+        shapes = {m[1][:2] for m in g["members"]}
+        if len(g["members"]) < 6 or len(shapes) < 3:
+            continue                                       # a few blobs, or identical markers: not text
+        # text sits in rows: a glyph has a neighbour on the same line a small gap away (grid fragments do not)
+        boxes = [m[1] for m in g["members"]]
+        in_words = sum(1 for i, (hh, _, yc, x0, x1) in enumerate(boxes)
+                       if any(j != i and abs(yc - yc2) <= max(hh, hh2) / 2
+                              and (0 <= x2a - x1 <= max(3, 0.8 * hh) or 0 <= x0 - x2b <= max(3, 0.8 * hh))
+                              for j, (hh2, _, yc2, x2a, x2b) in enumerate(boxes)))
+        if in_words < 6:
+            continue
+        c = tuple(float(v) / 255 for v in g["c"])
+        r = _ratio(c, bgc)
+        data["text"].append([hexc(c), round(r, 2)])
+        if r < WCAG_AA:
+            lines.append(f"Text {hexc(c)} on {hexc(bgc)}: contrast {r:.2f}:1, below WCAG AA (4.5:1) for normal text. "
+                         f"Fix: darken the text to at least 4.5:1 (on white, #767676 or darker).")
+    mark_groups = [g for g in group(marks, 24) if sum(m[1] for m in g["members"]) >= 40]
+    mark_cols = []
+    for g in mark_groups:
+        c = tuple(float(v) / 255 for v in g["c"])
+        if not chromatic(c, s_min=0.25, v_min=0.15):
+            continue                                       # axes, grid, connectors: grey ink is not a data colour
+        mark_cols.append(c)
+        r = _ratio(c, bgc)
+        data["marks"].append([hexc(c), round(r, 2)])
+        if r < 3.0:
+            lines.append(f"Mark colour {hexc(c)} on {hexc(bgc)}: contrast {r:.2f}:1, below 3:1 for graphical objects "
+                         "(WCAG 1.4.11): the marks are faint against the background. Fix: a darker or more "
+                         "saturated colour, or an outline.")
+    grey_pairs, cvd_pairs, n_pairs = [], [], 0
+    for i, a in enumerate(mark_cols):
+        for b in mark_cols[i + 1:]:
+            if _hue_gap(a, b) < 15:
+                continue                                   # shades of one hue: faces or tints of one mark
+            n_pairs += 1
+            r = _ratio(a, b)
+            cvd = {k: delta_e(simulate_cvd(a, k), simulate_cvd(b, k)) for k in ("protan", "deutan", "tritan")}
+            worst = min(cvd, key=lambda k: cvd[k])
+            data["pairs"].append([hexc(a), hexc(b), round(r, 2), worst, round(cvd[worst], 1)])
+            if r < 3.0:
+                grey_pairs.append((r, a, b))
+            if cvd[worst] < CVD_CONFUSED:
+                cvd_pairs.append((cvd[worst], worst, a, b))
+    if len(grey_pairs) > 3:
+        r, a, b = min(grey_pairs)
+        lines.append(f"Mark colours in grayscale: {len(grey_pairs)} of {n_pairs} pairs of differently-hued mark "
+                     f"colours are below 3:1 against each other — closest {hexc(a)} and {hexc(b)} at {r:.2f}:1 — so "
+                     "in grayscale print they are told apart only by position or labels. Fix: vary lightness as "
+                     "well as hue, or label the marks directly.")
+    else:
+        for r, a, b in sorted(grey_pairs):
+            lines.append(f"Mark colours {hexc(a)} and {hexc(b)}: contrast {r:.2f}:1 between them — they look the "
+                         "same in grayscale print (needs 3:1). Fix: vary lightness as well as hue, or label the "
+                         "marks directly.")
+    for de, kind, a, b in sorted(cvd_pairs)[:3]:
+        lines.append(f"Mark colours {hexc(a)} and {hexc(b)}: {kind} ΔE {de:.1f} — likely confused by readers with "
+                     f"colour-vision deficiency (needs {CVD_CONFUSED:g}). Fix: change one of them in lightness or "
+                     "hue (for example blue against orange), or label the marks directly.")
+    if len(cvd_pairs) > 3:
+        lines.append(f"{len(cvd_pairs) - 3} more pair(s) of mark colours are likely confused with colour-vision "
+                     "deficiency (ΔE below 10).")
+    if lines:
+        body = "\n".join(f"- {ln}" for ln in lines)
+        msg = f"{COLOUR_BLOCK_TITLE} (paste verbatim; make no other statement about colour perception):\n{body}"
+        return [Finding("WARN", "colour-block", msg, data=data)]
+    return [Finding("INFO", "colour-block", f"{COLOUR_BLOCK_TITLE}: none. The checker found no contrast or colour-"
+                    "separation problem; write nothing about colour perception (contrast, paleness, grayscale, "
+                    "colour-vision deficiency).", data=data)]
 
 
 def pick_findings(path: str, box: tuple[int, int, int, int], element: str = "text") -> list[Finding]:
@@ -1535,8 +1690,16 @@ def figure_findings(script: str) -> list[Finding]:
             out += _check_scatter_sizes(ax, w, src)
             out += _check_banking(fig, ax, w)
     out += _check_category_colours(all_pairs)
+    import tempfile
+
     import matplotlib.pyplot as plt
-    for fig in figs:
+    for fi, fig in enumerate(figs):
+        with tempfile.TemporaryDirectory() as tmp:
+            png = os.path.join(tmp, "fig.png")
+            fig.savefig(png, dpi=110)
+            for f in colourcheck_findings(png):
+                f.where = f"fig{fi + 1}"
+                out.append(f)
         plt.close(fig)
     # de-duplicate identical messages
     seen, uniq = set(), []
@@ -1877,6 +2040,9 @@ def main(argv=None, cross_check: bool = False) -> int:
     q.add_argument("--box", nargs=4, type=int, required=True, metavar=("X0", "Y0", "X1", "Y1"))
     q.add_argument("--element", choices=("text", "line", "fill"), default="text")
 
+    q = sub.add_parser("colourcheck", help="the colour & contrast findings block for an image (only failures)")
+    q.add_argument("path")
+
     q = sub.add_parser("cvd", help="colour-vision deficiency: ΔE between two colours as protan/deutan/tritan see them")
     q.add_argument("a")
     q.add_argument("b")
@@ -1928,6 +2094,8 @@ def main(argv=None, cross_check: bool = False) -> int:
             fs = colour_findings(a.path, tuple(a.box) if a.box else None, a.top)
         elif a.cmd == "pick":
             fs = pick_findings(a.path, tuple(a.box), a.element)
+        elif a.cmd == "colourcheck":
+            fs = colourcheck_findings(a.path)
         elif a.cmd == "cvd":
             fs = cvd_findings(a.a, a.b)
         elif a.cmd == "contrast":

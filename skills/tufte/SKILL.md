@@ -35,7 +35,7 @@ python3 /abs/path/to/skill/scripts/tufte_check.py image chart.png --then lf --da
 
 | Command | Use |
 |---|---|
-| `image chart.png` | Image only. Aspect ratio, colour-coded axes, colour sets of the left/right halves. It cannot compute integrity from pixels. |
+| `image chart.png` | Image only. Aspect ratio, colour-coded axes, colour sets of the left/right halves, and the "Colour & contrast findings" block. It cannot compute integrity from pixels. |
 | `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels: box width/height, area. Feed all of them to `scaling`. |
 | `scaling --values … --sizes …` | Fits which rule maps values to measured sizes (radius ∝ value or area ∝ value) and gives the LF for smallest→largest. |
 | `figure plot.py` | Runs a matplotlib script (show/close disabled) and checks every figure: bar baselines with Lie Factor (per series and chart-wide), dual-axis colours, category colours across panels, time spacing, pies, grid, 3-D, smoothing, area fills, icon scaling, titles. |
@@ -43,10 +43,11 @@ python3 /abs/path/to/skill/scripts/tufte_check.py image chart.png --then lf --da
 | `lf --data A B --baseline X --mark bar` | Lie Factor from two values you read (`--mark line`/`point` answers "not applicable"). `--encoding both-dims`/`radius` when linear size ∝ value, `volume` for 3-D; `--measured D1 D2 --measure diameter` for sizes measured in pixels. |
 | `lfmax --mark bar --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart Lie Factor — the strongest distortion over every pair of marks, across series too — plus each series' own LF. `--mark line`/`point`/`dumbbell` answers "not applicable". |
 | `lf --bound …` | Values unreadable: `--baseline B --axis-max T` gives LF ≥ T/(T−B) for bars from B; `--encoding radius` gives LF ≥ 2, but only when you know linear size ∝ value (a legend says so) — growing width and height alone do not prove it; bare `--bound` tells you to report "cannot be computed". |
-| `pick chart.png --box X0 Y0 X1 Y1 --element text\|line\|fill` | The colour of ONE element in the box (its solid core, not edges) and its contrast with the box background, or "not determined". |
+| `colourcheck chart.png` | The "Colour & contrast findings" block (also printed by `image` and `figure`): the only source of colour-perception statements in an audit. |
+| `pick chart.png --box X0 Y0 X1 Y1 --element text\|line\|fill` | The colour of ONE element in the box (its solid core, not edges) and its contrast with the box background, or "not determined" — for building charts. |
 | `colours chart.png [--box …]` | The solid colours drawn in an image (edge mixtures removed), not which element has which. |
-| `cvd A B` | Two colours as protan, deutan and tritan readers see them: ΔE and "likely confused / close / distinct". |
-| `contrast FG BG [--size large]` | WCAG 2.x contrast ratio of a text colour on its background, with AA/AAA verdicts. The only basis for a contrast claim. |
+| `cvd A B` | Two colours as protan, deutan and tritan readers see them: ΔE and "likely confused / close / distinct" — for building charts. |
+| `contrast FG BG [--size large]` | WCAG 2.x contrast ratio of a text colour on its background, with AA/AAA verdicts — for building charts. |
 | `time L1 L2 …` | Are labels drawn evenly also even in time? `--positions` if the spacing is not even. |
 
 An ERROR from `figure`/`spec` is computed from the chart's own objects — report it (check it
@@ -142,28 +143,21 @@ Three rules make the reading trustworthy:
   silently missing period, is a finding.
 - **Every other number you state** (growth multiples, sums of percentages, differences): compute
   it, do not estimate it. Percent labels of one pie must sum to 100.
-- **Colours: no judgement by eye — negative or positive.** Any statement about how well colours
-  separate needs a number from the tool, quoted in the same sentence: pale, faded, low-contrast,
-  merges, blends in, hard to tell apart, collides in grayscale, confuses colour-blind readers — and
-  equally "the colours are distinct", "contrasting colours", "readable grey". This includes the "why
-  it matters" lines: do not add "especially in black-and-white print or on a projector" or "for
-  colour-blind readers" without a number. Without the number these phrases are forbidden: "the
-  footnote is pale", "small and grey", "the base of the gradient merges", "A and D are easy to confuse
-  in grey", "hard for colour-blind readers", "the lines will merge for readers with impaired colour
-  vision", "the colours are distinct", «сноска бледная», «мелко и серым», «сливается», «бледнеет до
-  фона», «легко спутать в сером», «мешает читателям с нарушениями цветовосприятия», «сольются при
-  нарушении цветового зрения», «цвета различимы», «цвета контрастные». A gradient is a finding as
-  decoration (Data-ink); how far its base fades needs `pick` like any other colour.
-  - Colour of an element: from the source code or spec; with only an image, `pick chart.png --box X0
-    Y0 X1 Y1 --element text|line|fill` with a box around that one element. It takes the solid core
-    (not anti-aliased edges) and ignores other ink in the box. If it answers "not determined", make no
-    colour statement about that element. `colours` lists the solid colours of an image but not which
-    element has which, so do not take an element's colour from it.
-  - Text on its background: `contrast FG BG` (AA: 4.5:1, large text 3:1). Two marks or series in
-    grayscale: `contrast A B` (distinguishable at 3:1 or more). Readers with colour-vision deficiency:
-    `cvd A B` — claim confusion only when its worst-case ΔE is below 10, and quote it.
-  - If `pick` answers "not determined" and the source is not available, make no statement about that
-    element's colour — do not substitute a colour read by eye or a number from an example.
+- **Colour perception: only the checker speaks.** `image` and `figure` end with a block titled
+  "Colour & contrast findings" (also `colourcheck chart.png`). It is computed from the pixels: text
+  contrast (WCAG AA), faint marks (3:1), mark colours that merge in grayscale (3:1 between them) or for
+  colour-vision deficiency (ΔE below 10). It lists failures only.
+  - Put its bullet lines into the report **verbatim**, as one section "Colour & contrast findings". If
+    it says "none", write no such section.
+  - Make **no other statement about colour perception anywhere** — not in findings, verdict, "why it
+    matters", fixes or the Reading: nothing about contrast, pale / faded / light / grey text, merging,
+    blending into the background, distinctness, "colours are distinct / contrasting", grayscale or
+    black-and-white print, projectors, colour-blind readers. Not even true-sounding ones, not even with
+    a number from `pick`, `contrast` or `cvd` (those tools are for building charts, not for adding
+    statements to an audit).
+  - Still allowed — they are about meaning, not perception: colour that carries no data or is
+    decorative, the same category in two colours, a legend that does not match, a gradient fill as
+    decoration (say "gradient fill, carries no data" — not how it fades).
 
 ### 4. Judge with the rubric
 List only rows that actually fail. Page numbers point to `references/canon.md`.
@@ -214,8 +208,10 @@ Reply in the user's language.
 2. **Findings**, most severe first, grouped by the four levels above. Each: *what* (with the
    evidence — the value you read, or the tool command and its output line for any LF), *why it
    matters* (one line, cite the principle), *fix* (concrete: what to draw instead).
-3. **Could not verify** — what was unreadable or ambiguous.
-4. **Reading** — the transcription from step 2, compact.
+3. **Colour & contrast findings** — the checker's bullet lines, verbatim, in English as printed. Omit
+   this section when the checker says "none". It is the only place colour perception appears.
+4. **Could not verify** — what was unreadable or ambiguous (nothing about colour perception).
+5. **Reading** — the transcription from step 2, compact (colours as identities only: "orange = 2025").
 
 Do not pad. A clean chart gets a short report; an invented problem is as wrong as a missed one.
 
