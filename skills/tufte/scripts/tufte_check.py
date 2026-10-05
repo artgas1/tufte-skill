@@ -11,6 +11,7 @@ Subcommands
   blobs   Measure coloured shapes in a PNG/JPG (circles, icons): size in pixels.
   scaling Fit the rule that maps values to shape sizes (radius vs area) and give the Lie Factor.
   contrast WCAG 2.x contrast ratio of a text colour on its background, with AA/AAA verdicts.
+  colours The colours drawn in a PNG/JPG or a pixel box of it: hex, share, contrast against the background.
   figure  Run a matplotlib script under the Agg backend and inspect every figure it builds.
   spec    Inspect a Vega-Lite spec or a Plotly figure JSON.
 
@@ -577,6 +578,53 @@ def _load_rgb(path: str):
     return arr[..., :3].astype("float64")
 
 
+def colour_findings(path: str, box: tuple[int, int, int, int] | None = None, top: int = 8,
+                    min_share: float = 0.002) -> list[Finding]:
+    """The colours actually drawn in a PNG/JPG (or in a pixel box of it), with their share of pixels and
+    their contrast against the most common colour (the background). Use these hex values with `contrast`
+    instead of judging colours by eye."""
+    import numpy as np
+
+    arr = _load_rgb(path)
+    h, w = arr.shape[:2]
+    if box is not None:
+        x0, y0, x1, y1 = box
+        x0, x1 = sorted((max(0, x0), min(w, x1)))
+        y0, y1 = sorted((max(0, y0), min(h, y1)))
+        if x1 - x0 < 1 or y1 - y0 < 1:
+            raise ValueError(f"--box is empty inside a {w}×{h} image")
+        arr = arr[y0:y1, x0:x1]
+    px = (np.clip(arr, 0, 1) * 255).round().astype(int).reshape(-1, 3)
+    keys = (px // 8)                                       # bins of 8 levels per channel
+    flat = keys[:, 0] * 1024 + keys[:, 1] * 32 + keys[:, 2]
+    _, inv, counts = np.unique(flat, return_inverse=True, return_counts=True)
+    order = np.argsort(-counts)
+    total = float(len(flat))
+    rows, cols = [], []
+    for k in order[: max(top * 4, 32)]:
+        share = counts[k] / total
+        if share < min_share:
+            break
+        mean = px[inv == k].mean(axis=0) / 255.0
+        cols.append(((float(mean[0]), float(mean[1]), float(mean[2])), share))
+        if len(cols) >= top:
+            break
+    if not cols:
+        return [Finding("WARN", "colours", "no colour covers the minimum share; try a larger --box.")]
+    bg = cols[0][0]
+    lb = relative_luminance(bg)
+    for rgb, share in cols:
+        lc = relative_luminance(rgb)
+        ratio = (max(lc, lb) + 0.05) / (min(lc, lb) + 0.05)
+        rows.append(f"{hexc(rgb)}  {share:6.1%} of pixels  contrast vs {hexc(bg)}: {ratio:.2f}:1")
+    where = f"box {box}" if box else f"whole image {w}×{h}px"
+    return [Finding("INFO", "colours", f"most common colours ({where}; the first is taken as the background):\n  "
+                    + "\n  ".join(rows) + "\nAnti-aliased edges are mixtures, so thin text may not appear as its own "
+                    "colour: give `--box` around the text. For two marks or series run `contrast A B` with these "
+                    "hex values. Without a ratio, make no claim about how well colours separate.",
+                    data={"colours": [[hexc(c), round(sh, 4)] for c, sh in cols]})]
+
+
 def blob_findings(path: str, min_px: int = 30, colour: str | None = None, tol: float = 0.12) -> list[Finding]:
     """Connected regions of chromatic pixels (or of one colour) with their pixel sizes."""
     from collections import deque
@@ -718,7 +766,7 @@ def _bar_containers(ax):
 TRUNCATION_NOTE = re.compile(
     r"truncat|broken axis|axis break|not (?:start(?:ing)? )?(?:at|from) zero|non-?zero (?:baseline|axis)|"
     r"(?:axis|scale)\b[^.\n]{0,40}\b(?:starts?|begins?)\b[^.\n]{0,10}\b(?:at|from)\b|"
-    r"не с нуля|усеч|обрез|разрыв|ось[^.\n]{0,30}начина", re.IGNORECASE)
+    r"не с нуля|не от нуля|усеч|обрез|разрыв|(?:ось|шкала)[^.\n]{0,30}(?:начина|от\s*\d)", re.IGNORECASE)
 DISCLAIMER = re.compile(r"source|data:|источник|данные:|illustrative|hypothetical|synthetic|example data|"
                         r"fictional|условн|иллюстрац|вымышлен", re.IGNORECASE)
 
@@ -730,6 +778,58 @@ def _figure_texts(fig) -> str:
     for ax in fig.axes:
         parts += [ax.get_title(), ax.get_xlabel(), ax.get_ylabel()] + [t.get_text() for t in ax.texts]
     return " ".join(p for p in parts if p)
+
+
+def _has_break_mark(ax) -> bool:
+    """A drawn axis break: short lines placed in axes coordinates and not clipped (the usual `//` idiom)."""
+    for ln in ax.get_lines():
+        if ln.get_transform() is ax.transAxes and not ln.get_clip_on():
+            return True
+    return False
+
+
+def _numeric_ticks(axis) -> bool:
+    labels = [t.get_text().replace("−", "-").replace(",", ".").strip().rstrip("%") for t in axis.get_ticklabels()]
+    labels = [lab for lab in labels if lab]
+    if not labels:
+        return False
+    try:
+        [float(lab) for lab in labels]
+    except ValueError:
+        return False
+    return True
+
+
+def _check_position_truncation(fig, ax, where):
+    """Lines and points on a value axis that starts above zero. Not a distortion (no Lie Factor), but the
+    start must be MARKED: a break symbol or a note. A tick label that reads the start value is not a mark."""
+    data_lines = [ln for ln in ax.get_lines() if ln.get_transform() is not ax.transAxes and len(ln.get_xdata()) >= 2]
+    scatters = [c for c in ax.collections if c.__class__.__name__ == "PathCollection" and len(c.get_offsets()) >= 1]
+    if (not data_lines and sum(len(c.get_offsets()) for c in scatters) < 2) or _bar_containers(ax):
+        return []
+    marked = bool(TRUNCATION_NOTE.search(_figure_texts(fig))) or _has_break_mark(ax)
+    out = []
+    for name, axis, lim in (("y", ax.yaxis, ax.get_ylim()), ("x", ax.xaxis, ax.get_xlim())):
+        lo = min(lim)
+        vals = []
+        for ln in data_lines:
+            vals += [float(v) for v in (ln.get_ydata() if name == "y" else ln.get_xdata())]
+        for c in scatters:
+            vals += [float(p[1] if name == "y" else p[0]) for p in c.get_offsets()]
+        if not vals or lo <= 0 or min(vals) <= 0 or not _numeric_ticks(axis):
+            continue
+        if name == "x" and data_lines and not scatters:
+            continue   # a line chart's x axis is its domain (time), not a value axis
+        if marked:
+            out.append(Finding("INFO", "axis-start", f"{name} axis starts at {lo:g} and the chart marks it (a note or a "
+                               "break symbol): a disclosed choice. Lines and points encode by position: no Lie Factor "
+                               "and no distortion estimate.", where))
+        else:
+            out.append(Finding("WARN", "axis-start-unmarked", f"{name} axis starts at {lo:g}, and nothing marks it — no "
+                               "break symbol, no note. A tick label that reads the start value is NOT a mark. Report "
+                               "'axis start not marked' and the fix (a break symbol or a note such as 'axis starts at "
+                               f"{lo:g}'). Lines and points encode by position: no Lie Factor, no 'N times'.", where))
+    return out
 
 
 def _check_bars(ax, where, labelled_truncation: bool = False):
@@ -1202,7 +1302,8 @@ def figure_findings(script: str) -> list[Finding]:
         for ax in fig.axes:
             w = ax_index(ax)
             n_series = len(_bar_containers(ax)) + len([ln for ln in ax.get_lines() if not ln.get_label().startswith("_")])
-            out += _check_bars(ax, w, bool(TRUNCATION_NOTE.search(_figure_texts(fig))))
+            out += _check_bars(ax, w, bool(TRUNCATION_NOTE.search(_figure_texts(fig))) or _has_break_mark(ax))
+            out += _check_position_truncation(fig, ax, w)
             out += _check_pies(fig, ax, w)
             out += _check_ink(fig, ax, w, n_series)
             out += _check_smoothing(ax, w)
@@ -1349,15 +1450,39 @@ def plotly_findings(fig: dict) -> list[Finding]:
         return ch + "axis" + ref[1:]
 
     truncated: dict[tuple[str, float], dict[str, list[float]]] = {}
+    notes = " ".join([_title_text(layout.get("title"))] + [str(a.get("text", "")) for a in layout.get("annotations") or []
+                                                           if isinstance(a, dict)])
+    marked = bool(TRUNCATION_NOTE.search(notes))
+    unmarked_done: set[str] = set()
     for i, t in enumerate(traces):
         typ = t.get("type", "scatter")
+        if typ in ("scatter", "scattergl"):
+            key = axis_key(t, "y")
+            ax_y = layout.get(key, {}) or {}
+            rng = ax_y.get("range")
+            ys = [v for v in (t.get("y") or []) if isinstance(v, (int, float)) and not isinstance(v, bool)]
+            if (isinstance(rng, list) and len(rng) == 2 and min(rng) > 0 and ys and min(ys) > 0
+                    and ax_y.get("type") != "log" and key not in unmarked_done):
+                unmarked_done.add(key)
+                if marked:
+                    out.append(Finding("INFO", "axis-start", f"{key} starts at {min(rng):g} and the title or an "
+                                       "annotation says so: a disclosed choice. Position encoding: no Lie Factor.", key))
+                else:
+                    out.append(Finding("WARN", "axis-start-unmarked", f"{key} starts at {min(rng):g} and no title or "
+                                       "annotation says so (tick labels are not a mark). Report 'axis start not "
+                                       "marked'. Position encoding: no Lie Factor, no 'N times'.", key))
         where = f"trace {i} ({t.get('name') or typ})"
         if typ == "bar":
             ch = "x" if t.get("orientation") == "h" else "y"
             ax = layout.get(axis_key(t, ch), {}) or {}
             rng = ax.get("range")
             if isinstance(rng, list) and len(rng) == 2 and min(rng) > 0:
-                out.append(Finding("ERROR", "bar-baseline", f"bars on an axis whose range starts at {min(rng):g}.", where))
+                if marked:
+                    out.append(Finding("INFO", "bar-baseline", f"bars on an axis whose range starts at {min(rng):g}; the "
+                                       "title or an annotation says so: a labelled choice, not a defect.", where))
+                else:
+                    out.append(Finding("ERROR", "bar-baseline", f"bars on an axis whose range starts at {min(rng):g}.",
+                                       where))
                 vals = t.get(ch)
                 if (ax.get("type") != "log" and isinstance(vals, list) and vals
                         and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals)):
@@ -1444,6 +1569,9 @@ def plotly_findings(fig: dict) -> list[Finding]:
             continue
         head = lfmax_findings(series, baseline=base)[0]
         head.where = key
+        if marked:
+            head = Finding("INFO", "lie-factor-max", "labelled truncation; for reference, "
+                           + head.message.split(". The graphic")[0] + ".", key, head.data)
         out.append(head)
     return out
 
@@ -1517,6 +1645,11 @@ def main(argv=None, cross_check: bool = False) -> int:
                    help="what is drawn. bar|column|lollipop|area: length from a baseline, LF applies. "
                         "line|point|dot|scatter|slope: position encoding, LF does not apply")
 
+    q = sub.add_parser("colours", help="colours drawn in a PNG/JPG (or a pixel box), share and contrast vs background")
+    q.add_argument("path")
+    q.add_argument("--box", nargs=4, type=int, metavar=("X0", "Y0", "X1", "Y1"), help="pixel box, top-left origin")
+    q.add_argument("--top", type=int, default=8)
+
     q = sub.add_parser("contrast", help="WCAG 2.x contrast ratio of a text colour on a background, AA/AAA")
     q.add_argument("fg", help="text colour, e.g. #555555")
     q.add_argument("bg", help="background colour, e.g. #ffffff")
@@ -1560,6 +1693,8 @@ def main(argv=None, cross_check: bool = False) -> int:
                                  cross_check=cross_check and size_encoding)
         elif a.cmd == "lfmax":
             fs = lfmax_findings(parse_series(a.series), a.baseline, a.encoding, a.mark)
+        elif a.cmd == "colours":
+            fs = colour_findings(a.path, tuple(a.box) if a.box else None, a.top)
         elif a.cmd == "contrast":
             fs = contrast_findings(a.fg, a.bg, a.size)
         elif a.cmd == "scaling":

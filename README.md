@@ -39,6 +39,7 @@ script before rendering.
 | `lf --bound [--baseline B --axis-max T \| --encoding radius]` | When values are unreadable: LF ≥ T/(T−B) for bars from a non-zero baseline (for bars LF = v/(v−B), v the smaller value); LF ≥ 2 when linear size ∝ value; otherwise "cannot be computed" |
 | `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels |
 | `scaling --values … --sizes …` | Fits the rule that maps values to measured sizes (radius ∝ value vs area ∝ value), robust to anti-aliasing on small shapes, and gives the LF for smallest→largest |
+| `colours chart.png [--box X0 Y0 X1 Y1]` | The colours actually drawn in an image or a pixel box: hex, share of pixels, contrast against the background — the input for `contrast` when there is no source |
 | `contrast FG BG [--size large]` | WCAG 2.x contrast ratio of a text colour on its background with AA/AAA verdicts; the skill makes no contrast claim without it |
 | `time LABEL...` | Time labels drawn evenly but uneven in time; missing periods |
 | `image chart.png` | What pixels can tell: aspect ratio, colour-coded axes, colour sets of repeated panels. Says plainly that integrity cannot be computed from pixels |
@@ -50,7 +51,7 @@ script before rendering.
 Several commands run in one process with `--then`
 (`image chart.png --then lf --data 410 520 --baseline 400`).
 
-Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (63 tests) — every check has a
+Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (73 tests) — every check has a
 negative control (silent on a clean chart, fires on a broken one). Lint: `ruff check .` and
 `pyright skills/tufte/scripts evals` are clean.
 
@@ -71,7 +72,7 @@ or in `.claude/settings.json`:
 }
 ```
 
-To pin a release, add `"ref": "tufte-skill--v1.3.0"` (or another release tag) next to `"repo"`. Settings alone register
+To pin a release, add `"ref": "tufte-skill--v1.4.0"` (or another release tag) next to `"repo"`. Settings alone register
 the marketplace; run `claude plugin install tufte-skill@tufte-skill` once to install the plugin.
 
 **As a plain skill**: copy `skills/tufte/` to `~/.claude/skills/tufte/`.
@@ -425,9 +426,65 @@ on lines, 18.14 (minimum in the middle). F4 first failed because the virtualenv 
 directory outside the plugin, which the sandbox blocks; with a real virtualenv inside the plugin it
 passed.
 
-**Held-out acceptance of 1.3:** pending at the time of this commit.
+**Held-out acceptance of 1.3: not passed.** Against 1.0 on Sonnet it lowered false statements on clean
+controls from 1.22 to 0.39 per chart, "N times" on position encodings from 11/15 to 1/15, and kept the LF
+at 100% (1.0: 78%); cost ×1.07–1.11, auto-loading 66/66. Failure classes, without fixture details:
+(1) over-correction on Opus — lines on an axis cut without any mark were accepted 3 times of 3 because a
+tick read «70.0» ("it is visible from the label, so it is an open choice"); (2) Sonnet judged colours by
+eye ("the dark side faces almost merge with the background"); (3) one position chart described as
+"looks like a doubling".
+
+## Version 1.4
+
+**What changed.**
+- **A tick is not a mark.** An axis start above zero counts as marked only with a drawn break symbol, a
+  note or subtitle («шкала от 70», "axis starts at 70") or an annotation; a tick label showing the start
+  value does not count. Unmarked → one finding, "axis start not marked" — with the LF on bars, without
+  any number on lines and points. `figure` now reports `axis-start` / `axis-start-unmarked` for lines and
+  points (break symbols drawn in axes coordinates are detected; a break also labels a bar truncation),
+  and Plotly `spec` does the same from the title and annotations. The truncation-note pattern now also
+  reads «шкала от N», «шкала начинается», «не от нуля».
+- **No colour judgement by eye.** Any statement about how well colours separate — text, shapes, shaded
+  faces, series, grayscale print — needs a `contrast` ratio quoted in the finding. New `colours`
+  subcommand reads the colours actually drawn in a PNG (optionally in a pixel box) so the ratio can be
+  computed without the source.
+- **Forbidden phrases** for position encodings are listed in both languages ("looks like a doubling",
+  «рост кажется в разы больше», …).
+
+**Tests.** 73, ten of them new for 1.4 (as parametrised cases); against the 1.3 script nine fail — the
+unmarked/marked truncation on lines (tick, note, subtitle, break symbol), the dot plot on x, a break
+mark labelling bars, Plotly line truncation, the note pattern and `colours` — and one, lines from zero,
+passes on both by design.
+
+**Development check** (`evals/dev6/`, written before rendering: F17 lines on an axis from 70 with no
+mark and ticks «70.0»; F18 a dot plot from 40 with a break symbol and a note; F19 3-D bars in two
+colours):
+
+| | runs (Sonnet / Opus) | F17 unmarked start named | position claims, F17+F18 | colour statements without a ratio |
+|---|---|---|---|---|
+| 1.4 | 9 / 9 | 3/3 / 3/3 | 0 / 0 | 1 / 0 |
+| 1.3 | 6 / 6 | 0/2 / 0/2 | 0 / 0 | 2 / 0 |
+| 1.0 | 3 / — | 1/1 | 0 | 1 |
+
+The one 1.4 statement without a ratio was "black text on white has enough contrast" — true, but not
+backed. Every other colour finding of 1.4 quoted a ratio from `contrast` or `colours` (for example the
+two line colours of F17 at 1.03:1 — an accidental real issue of that chart — or label text on shaded
+faces at 1.51:1). 1.3 reproduced class (1) here on both models; class (3) did not reproduce in this set.
+F18 drew no false truncation finding from any version. Plugin-eval regression (F7, F17): all graders
+passed.
+
+**Held-out acceptance of 1.4:** pending at the time of this commit.
 
 ## Changelog
+
+**1.4.0**
+- A tick label is not a truncation mark: unmarked starts are a finding (with LF on bars, without any
+  number on lines and points); `figure`/Plotly `spec` report `axis-start` / `axis-start-unmarked`; a drawn
+  break symbol labels a truncation.
+- No colour judgement by eye: any statement about colours separating needs a `contrast` ratio; new
+  `colours` reads the colours drawn in a PNG or a pixel box.
+- Forbidden distortion phrases for position encodings listed in English and Russian.
+- `evals/dev6/` and plugin-eval cases F17–F19.
 
 **1.3.0**
 - No quantitative distortion claim, in numbers or words, for position encodings (lines, dots, scatter,

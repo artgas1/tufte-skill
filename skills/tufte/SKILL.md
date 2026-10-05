@@ -43,6 +43,7 @@ python3 /abs/path/to/skill/scripts/tufte_check.py image chart.png --then lf --da
 | `lf --data A B --baseline X --mark bar` | Lie Factor from two values you read (`--mark line`/`point` answers "not applicable"). `--encoding both-dims`/`radius` when linear size ∝ value, `volume` for 3-D; `--measured D1 D2 --measure diameter` for sizes measured in pixels. |
 | `lfmax --mark bar --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart Lie Factor — the strongest distortion over every pair of marks, across series too — plus each series' own LF. `--mark line`/`point`/`dumbbell` answers "not applicable". |
 | `lf --bound …` | Values unreadable: `--baseline B --axis-max T` gives LF ≥ T/(T−B) for bars from B; `--encoding radius` gives LF ≥ 2, but only when you know linear size ∝ value (a legend says so) — growing width and height alone do not prove it; bare `--bound` tells you to report "cannot be computed". |
+| `colours chart.png [--box X0 Y0 X1 Y1]` | The colours actually drawn (hex, share of pixels, contrast against the background). Feed them to `contrast`. |
 | `contrast FG BG [--size large]` | WCAG 2.x contrast ratio of a text colour on its background, with AA/AAA verdicts. The only basis for a contrast claim. |
 | `time L1 L2 …` | Are labels drawn evenly also even in time? `--positions` if the spacing is not even. |
 
@@ -105,10 +106,18 @@ Three rules make the reading trustworthy:
   - **Lines and points: no distortion estimate at all.** A line, a dot plot, a scatter, a slope chart
     or a dumbbell encodes by position; a value axis that starts above zero moves the marks but
     inflates no drawn magnitude. Write "LF not applicable (position encoding)" and make **no
-    quantitative claim about distortion — neither a number nor words**: not "the 3.4–4.8 axis
-    stretches the changes about 2.9 times", not "growth looks several times larger", not "the slope
-    is exaggerated". On these charts a labelled axis start is normal and is not a finding. An
-    unlabelled start is one Labels note, "axis start not marked", with no figures attached.
+    quantitative claim about distortion — neither a number nor words**. Forbidden on these charts, in
+    any language: "LF = …", "stretches the changes about 2.9 times", "growth looks several times
+    larger", "looks like a doubling", "visually the rise is N-fold", "the slope is exaggerated N times",
+    «выглядит как удвоение», «рост кажется в разы больше», «растягивает изменения». What is allowed is
+    only whether the start is marked (next bullet).
+  - **Marked or not — a tick is not a mark.** An axis start above zero is *marked* only by an explicit
+    sign: a drawn axis-break symbol, a note or subtitle ("axis starts at 70", «шкала от 70», «ось не
+    от нуля»), or an annotation on the axis. **A tick label that shows the start value («70.0», «40»)
+    is not a mark** — every axis has one. Marked: a disclosed choice, not a finding. Not marked: one
+    finding, "axis start not marked", with the fix (add a break symbol or a note). On lines and points
+    that finding carries no number; on bars, lollipops and areas from a baseline it carries the LF.
+    `figure`/`spec` report this as `axis-start` (marked) or `axis-start-unmarked`.
   - **Truncated bars:** `lf --data V1 V2 --baseline B --mark bar`. For bars LF = v/(v − B) with v
     the smaller value, so the exact value of the larger bar barely matters.
   - **Several series on one truncated axis** (bars, lollipops, areas to a baseline): readers compare
@@ -131,10 +140,14 @@ Three rules make the reading trustworthy:
   silently missing period, is a finding.
 - **Every other number you state** (growth multiples, sums of percentages, differences): compute
   it, do not estimate it. Percent labels of one pie must sum to 100.
-- **Text contrast:** a claim that text is too light, low-contrast or hard to read needs `contrast
-  FG BG` (WCAG 2.x ratio; AA needs 4.5:1 for normal text, 3:1 for large). Quote its line. Grey text
-  often passes: #555555 on white is 7.46:1. Colours come from the source code or spec; with only an
-  image you do not know them exactly, so make no contrast claim.
+- **Colours: no judgement by eye.** Any statement about how well colours separate — text on its
+  background, shapes, shaded 3-D faces, two series, grayscale print — needs a ratio from `contrast`
+  quoted in the finding. Get the colours from the source code or spec; with only an image, read them
+  with `colours chart.png` (add `--box X0 Y0 X1 Y1` around text or a face) and pass the hex values to
+  `contrast`. Text needs 4.5:1 (AA), large text 3:1; two marks or series are distinguishable in
+  grayscale at 3:1 or more. No ratio — no statement, not even "faces almost merge with the
+  background" or "the series are hard to tell apart". Grey text often passes: #555555 on white is
+  7.46:1.
 
 ### 4. Judge with the rubric
 List only rows that actually fail. Page numbers point to `references/canon.md`.
@@ -142,7 +155,8 @@ List only rows that actually fail. Page numbers point to `references/canon.md`.
 **Not findings:**
 - **Choices the chart labels openly.** Tufte's second principle: clear labelling defeats
   distortion (VDQI p. 56). Examples:
-  - an axis that starts above zero with a break mark or a note ("axis starts at 400");
+  - an axis that starts above zero with a break mark or a note ("axis starts at 400") — a tick label
+    alone is not such a note;
   - a labelled log scale;
   - "illustrative / hypothetical / example data", "данные условные", "для иллюстрации" — a
     disclosure that counts as documentation. It does not contradict the source line next to it: a
@@ -159,7 +173,7 @@ List only rows that actually fail. Page numbers point to `references/canon.md`.
 | Area | Question | Fails when |
 |---|---|---|
 | Proportion | Is every magnitude drawn proportionally? | LF outside 0.95–1.05 (VDQI p. 57) |
-| Baseline | Do bars and filled areas start at zero on a linear axis? | Non-zero start or log scale under bars |
+| Baseline | Do bars and filled areas start at zero on a linear axis? Is any other non-zero start marked? | Non-zero start or log scale under bars; a non-zero start with no break symbol or note (a tick label is not a note) |
 | Area | Do icons, bubbles and circles scale by area? | Width and height both ∝ value; radius ∝ value; Plotly default `sizemode='diameter'` |
 | Dimensions | Does depth carry data? | 3-D, perspective or extrusion for 1-D/2-D data (VDQI p. 71) |
 | Time | Is distance proportional to elapsed time? | Uneven intervals drawn evenly; a period silently missing |

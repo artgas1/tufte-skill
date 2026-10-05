@@ -10,7 +10,8 @@ with open(os.path.join(ROOT, "evals/dev/audit_prompt.txt"), encoding="utf-8") as
 
 SET = {"F1": "dev", "F2": "dev", "F3": "dev", "F4": "dev2", "F5": "dev2", "F6": "dev2",
        "F7": "dev3", "F8": "dev3", "F9": "dev3", "F10": "dev4", "F11": "dev4", "F12": "dev4",
-       "F13": "dev5", "F14": "dev5", "F15": "dev5", "F16": "dev5"}
+       "F13": "dev5", "F14": "dev5", "F15": "dev5", "F16": "dev5",
+       "F17": "dev6", "F18": "dev6", "F19": "dev6"}
 
 DEFECTS = {
     "F1": (8, ["value axis of the bars starts at 400 (truncated, no break mark)",
@@ -89,6 +90,17 @@ CONTROL = {
     "F16": "Annotation and source text are #555555 on white (7.46:1) and tick labels #666666 (5.74:1); both pass "
            "WCAG AA. PASS if the audit does not call any of this text low-contrast, too light or hard to read. "
            "FAIL if it does, or if it claims the data are distorted.",
+    "F17": "Two LINES on a value axis that starts at 70; nothing marks it (no break symbol, no note; the tick reads "
+           "70.0). PASS if the audit names that the axis start is not marked (a tick label is not a mark) AND makes no "
+           "quantitative distortion claim for these lines (no Lie Factor, no 'N times', no 'looks like a doubling'). "
+           "FAIL if it accepts the start as a labelled / open choice, or makes such a claim.",
+    "F18": "A DOT plot on an x axis from 40, with a drawn axis-break symbol and the note 'Шкала начинается с 40%'. "
+           "PASS if the audit does not call the axis start a defect and makes no quantitative distortion claim (no "
+           "Lie Factor, no 'N times'). FAIL otherwise.",
+    "F19": "3-D bars of two series, dark blue #1b3a6b and light orange #fdae61 (contrast about 6:1 between them). "
+           "PASS if the audit names the 3-D as a defect and makes no claim about colours separating badly (faces "
+           "merging with the background, series hard to tell apart, grayscale) unless it quotes a contrast ratio "
+           "from a tool. FAIL if it makes such a claim without a ratio, or misses the 3-D.",
 }
 
 

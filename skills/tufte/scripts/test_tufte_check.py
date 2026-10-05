@@ -629,3 +629,97 @@ def test_more_position_marks_have_no_lie_factor(mark):
     fs = tc.lfmax_findings({"2024": [66.0, 70.0], "2025": [71.0, 72.0]}, baseline=60, mark=mark)
     assert [f.check for f in fs] == ["lie-factor-not-applicable"]
     assert "NO quantitative claim" in fs[0].message
+
+
+# ------------------------------------------------------------------ v1.4: a mark is not a tick; colours
+
+
+LINES_70 = """
+from matplotlib.ticker import FormatStrFormatter
+fig, ax = plt.subplots()
+ax.plot(range(12), [92, 91, 93, 94, 93, 95, 96, 95, 97, 97, 98, 98])
+ax.plot(range(12), [74, 78, 77, 81, 84, 83, 86, 88, 87, 90, 92, 94])
+ax.set_ylim({lo}, 100)
+ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+{extra}
+"""
+
+
+def test_unmarked_truncation_on_lines_is_reported_even_with_a_tick_reading_70(tmp_path):
+    fs = run_fig(tmp_path, LINES_70.format(lo=70, extra=""))
+    f = next(f for f in fs if f.check == "axis-start-unmarked")
+    assert f.severity == "WARN" and "tick label" in f.message and "no Lie Factor" in f.message
+    assert not checks(fs) & {"lie-factor", "lie-factor-max", "bar-baseline"}
+
+
+@pytest.mark.parametrize("mark", [
+    "fig.text(0.01, 0.01, 'Ось начинается с 70')",
+    "ax.set_title('Доля, %\\nШкала от 70')",
+    "ax.plot([-0.01, 0.01], [-0.02, 0.02], transform=ax.transAxes, clip_on=False, color='k')",
+])
+def test_marked_truncation_on_lines_is_disclosed(tmp_path, mark):
+    fs = run_fig(tmp_path, LINES_70.format(lo=70, extra=mark))
+    assert "axis-start-unmarked" not in checks(fs) and "axis-start" in checks(fs, "INFO")
+
+
+def test_lines_from_zero_need_no_mark(tmp_path):
+    assert not checks(run_fig(tmp_path, LINES_70.format(lo=0, extra=""))) & {"axis-start", "axis-start-unmarked"}
+
+
+def test_dot_plot_on_x_axis(tmp_path):
+    body = """
+    fig, ax = plt.subplots()
+    for i, v in enumerate([71, 66, 62, 55, 48]):
+        ax.scatter([v], [i])
+    ax.set_yticks(range(5), ['a', 'b', 'c', 'd', 'e'])
+    ax.set_xlim(40, 80)
+    """
+    assert "axis-start-unmarked" in checks(run_fig(tmp_path, body))
+    titled = body.rstrip(" ") + "    ax.set_title('Шкала начинается с 40%')\n"
+    assert "axis-start" in checks(run_fig(tmp_path, titled), "INFO")
+
+
+def test_break_mark_labels_a_bar_truncation(tmp_path):
+    marked = BARS.format(extra="ax.set_ylim(400, 480)\nax.plot([-0.01, 0.01], [-0.02, 0.02], "
+                               "transform=ax.transAxes, clip_on=False, color='k')")
+    f = next(f for f in run_fig(tmp_path, marked) if f.check == "bar-baseline")
+    assert f.severity == "INFO"
+
+
+def test_plotly_marked_and_unmarked_line_truncation():
+    lines = {"data": [{"type": "scatter", "mode": "lines", "y": [92, 95, 98]},
+                      {"type": "scatter", "mode": "lines", "y": [74, 84, 94]}],
+             "layout": {"yaxis": {"range": [70, 100]}}}
+    assert "axis-start-unmarked" in checks(tc.plotly_findings(lines), "WARN")
+    noted = {**lines, "layout": {**lines["layout"], "annotations": [{"text": "Ось начинается с 70"}]}}
+    fs = tc.plotly_findings(noted)
+    assert "axis-start-unmarked" not in checks(fs) and "axis-start" in checks(fs, "INFO")
+    bars = {"data": [{"type": "bar", "name": "A", "y": [3.9, 4.2]}, {"type": "bar", "name": "B", "y": [2.4, 3.0]}],
+            "layout": {"yaxis": {"range": [2, 4.5]}, "title": {"text": "Конверсия (шкала от 2)"}}}
+    assert not checks(tc.plotly_findings(bars), "ERROR") & {"bar-baseline", "lie-factor-max"}
+
+
+def test_truncation_note_regex():
+    for yes in ("Шкала начинается с 40%", "ось не от нуля", "Ось начинается с 3,4", "axis starts at 400", "шкала от 70"):
+        assert tc.TRUNCATION_NOTE.search(yes), yes
+    for no in ("70.0", "Доля решённых обращений, %", "Источник: служба поддержки"):
+        assert not tc.TRUNCATION_NOTE.search(no), no
+
+
+def test_colours_read_from_png(tmp_path):
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+
+    fig = plt.figure(figsize=(4, 2), dpi=100)
+    fig.add_artist(Rectangle((0.1, 0.2), 0.3, 0.6, color="#1b3a6b", transform=fig.transFigure))
+    fig.add_artist(Rectangle((0.6, 0.2), 0.3, 0.6, color="#fdae61", transform=fig.transFigure))
+    p = tmp_path / "c.png"
+    fig.savefig(p)
+    plt.close(fig)
+    f = tc.colour_findings(str(p))[0]
+    found = [c for c, _ in f.data["colours"]]
+    assert found[0] == "#ffffff"
+    assert any(tc.rgb_dist(tc.parse_colour(c), tc.parse_colour("#1b3a6b")) < 0.03 for c in found)
+    assert any(tc.rgb_dist(tc.parse_colour(c), tc.parse_colour("#fdae61")) < 0.03 for c in found)
+    # the two series separate in grayscale: contrast between them well above 3:1
+    assert tc.contrast_findings("#1b3a6b", "#fdae61")[0].data["ratio"] > 6
