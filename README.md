@@ -8,6 +8,12 @@ The skill is small on purpose: a ~2,200-word procedure, a deterministic checker 
 reference file of quotes verified against the books. It complements palette and chart-type
 skills rather than replacing them.
 
+**Release status.** Current release: **1.4.0**. It passed four of six pre-registered held-out
+criteria on both models and missed two narrowly (colour statements on Sonnet; false findings on
+Opus, judge-dependent) — see [Held-out acceptance of 1.4](#held-out-acceptance-of-14). Versions
+1.1–1.3 were built and tested but not released: each failed its held-out acceptance. 1.4.1 (colour
+picking fixes) is in progress and not released.
+
 ## What it does
 
 **Audit** (an image, a screenshot, a matplotlib script, a Vega-Lite spec or a Plotly figure):
@@ -473,9 +479,57 @@ faces at 1.51:1). 1.3 reproduced class (1) here on both models; class (3) did no
 F18 drew no false truncation finding from any version. Plugin-eval regression (F7, F17): all graders
 passed.
 
-**Held-out acceptance of 1.4:** pending at the time of this commit.
+### Held-out acceptance of 1.4
+
+**Method change.** Earlier acceptances required zero errors of a kind at three runs per cell; a
+single stochastic sentence failed a whole release, and each fix traded one error class for another.
+For 1.4 the criteria were pre-registered as non-inferiority against the released 1.0, with
+thresholds on rates and 95% CIs (bootstrap with charts fixed and runs resampled within each chart),
+five runs per cell on the key charts and three on the rest. Fresh held-out set: 12 charts, 6 of them
+key, defects written before rendering; the builder never saw it. Blind judge: Sonnet; Opus
+re-judged the disputed charts.
+
+| Criterion (1.4 vs 1.0 unless stated) | Sonnet | Opus |
+|---|---|---|
+| P1a main defect found, difference | +0.03 [0; 0.10] — pass | +0.18 [0.08; 0.25] — pass |
+| P1b all defects found, difference | +0.006 — pass | +0.03 — pass |
+| P2 false findings on controls per audit, difference | −0.57 [−0.91; −0.22] — pass | **+0.20 [0; 0.50] — fail** |
+| P3 Lie Factor correct (±10%, or "not computable") | 16/16 — pass | 16/16 — pass |
+| P4 "N times" claims on position encodings | 0/19 — pass | 0/19 — pass |
+| P5 colour statements backed by a number and correct | **77/86 = 0.895, threshold 0.90 — fail** | 83/87 — pass |
+| P6 cost vs no skill | ×1.26 — pass | ×1.16 — pass |
+
+Auto-loading: 96/96 runs.
+
+**What failed, honestly.**
+- *P5 on Sonnet* (confirmed by the Opus judge). Two causes: `colours` read from a PNG returned a
+  wrong colour — the neighbouring line instead of the text (3.76 instead of 4.87), or an
+  anti-aliased edge pixel; and the model still wrote colour judgements without a number ("the
+  footnote is small and pale", "A and D are easy to confuse in grey").
+- *P2 on Opus* depends on the judge and on the plan cut: after the cut only two controls had both
+  arms; the primary judge counted two false findings ("hinders readers with colour-vision
+  deficiency", a Russian typography nit), the Opus judge counted none (−0.1 [−0.3; 0], pass).
+
+**Against 1.0** 1.4 finds more defects (most on Opus), keeps the Lie Factor exact, makes no
+distortion claims on lines and points, and on Sonnet produces fewer false findings. It was released
+with the two misses documented rather than iterated further.
+
+**Known limitations of 1.4.0.**
+- `colours` on a PNG can return the colour of an adjacent element or of an anti-aliased edge; read
+  contrast from the chart source (`figure`/`spec`) or `contrast FG BG` with known colours when
+  possible.
+- The model sometimes states colour or colour-vision judgements without a ratio despite the rule.
+- Synthetic charts, few runs per cell; P2 on Opus is judge-dependent.
 
 ## Changelog
+
+**1.4.1 — in progress, not released.** Pick the colour of one element from its solid core
+(`pick`), drop anti-aliased colours in `colours`, a deterministic colour-vision check (`cvd`), and
+stricter no-number-no-colour-statement rules. Not yet through held-out acceptance.
+
+**1.1.0–1.3.0 — not released.** Each failed its held-out acceptance (1.1: radius regression and
+false findings on Sonnet; 1.2: distortion wording on position charts on Sonnet; 1.3: an unmarked
+truncation missed on Opus, colour judged by eye on Sonnet). Their changes are part of 1.4.0.
 
 **1.4.0**
 - A tick label is not a truncation mark: unmarked starts are a finding (with LF on bars, without any
