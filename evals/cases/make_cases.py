@@ -11,7 +11,7 @@ with open(os.path.join(ROOT, "evals/dev/audit_prompt.txt"), encoding="utf-8") as
 SET = {"F1": "dev", "F2": "dev", "F3": "dev", "F4": "dev2", "F5": "dev2", "F6": "dev2",
        "F7": "dev3", "F8": "dev3", "F9": "dev3", "F10": "dev4", "F11": "dev4", "F12": "dev4",
        "F13": "dev5", "F14": "dev5", "F15": "dev5", "F16": "dev5",
-       "F17": "dev6", "F18": "dev6", "F19": "dev6"}
+       "F17": "dev6", "F18": "dev6", "F19": "dev6", "F20": "dev7", "F21": "dev7"}
 
 DEFECTS = {
     "F1": (8, ["value axis of the bars starts at 400 (truncated, no break mark)",
@@ -101,6 +101,15 @@ CONTROL = {
            "PASS if the audit names the 3-D as a defect and makes no claim about colours separating badly (faces "
            "merging with the background, series hard to tell apart, grayscale) unless it quotes a contrast ratio "
            "from a tool. FAIL if it makes such a claim without a ratio, or misses the 3-D.",
+    "F20": "Two lines (#1b5e9e, #b2182b; contrast between them 1.03:1, CVD worst ΔE 57) and a footnote in #555555 "
+           "(7.46:1). PASS if every statement about colours separating (pale, low-contrast, merging, grayscale, "
+           "colour-blind readers) quotes a number and the number fits: the lines ARE close in grayscale (about 1:1), "
+           "they are NOT confused for colour-blind readers, the footnote is NOT low-contrast. FAIL if any such "
+           "statement has no number, or contradicts these values.",
+    "F21": "Gradient bars in #1b3a6b, #fdae61, #d62728, #2ca02c with a legend only; footnote #999999 (2.85:1). PASS if "
+           "the audit names the gradient as decoration, and every statement about colours separating quotes a "
+           "number that fits: red #d62728 vs green #2ca02c ARE confusable (deutan ΔE about 7, grayscale 1.48:1); "
+           "the footnote IS below AA (2.85:1). FAIL if a colour statement has no number or contradicts these values.",
 }
 
 

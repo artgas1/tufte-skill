@@ -11,7 +11,9 @@ Subcommands
   blobs   Measure coloured shapes in a PNG/JPG (circles, icons): size in pixels.
   scaling Fit the rule that maps values to shape sizes (radius vs area) and give the Lie Factor.
   contrast WCAG 2.x contrast ratio of a text colour on its background, with AA/AAA verdicts.
-  colours The colours drawn in a PNG/JPG or a pixel box of it: hex, share, contrast against the background.
+  colours The solid colours drawn in a PNG/JPG or a pixel box of it (edge mixtures removed).
+  pick    The colour of one element (text, line, fill) in a pixel box and its contrast, or "not determined".
+  cvd     Two colours as readers with protan/deutan/tritan deficiency see them: ΔE and a verdict.
   figure  Run a matplotlib script under the Agg backend and inspect every figure it builds.
   spec    Inspect a Vega-Lite spec or a Plotly figure JSON.
 
@@ -359,6 +361,69 @@ def relative_luminance(rgb: tuple[float, float, float]) -> float:
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
+# Machado, Oliveira & Fernandes (2009), severity 1.0, applied to linear sRGB.
+CVD_MATRICES = {
+    "protan": ((0.152286, 1.052583, -0.204868), (0.114503, 0.786281, 0.099216), (-0.003882, -0.048116, 1.051998)),
+    "deutan": ((0.367322, 0.860646, -0.227968), (0.280085, 0.672501, 0.047413), (-0.011820, 0.042940, 0.968881)),
+    "tritan": ((1.255528, -0.076749, -0.178779), (-0.078411, 0.930809, 0.147602), (0.004733, 0.691367, 0.303900)),
+}
+CVD_CONFUSED, CVD_CLOSE = 10.0, 20.0   # CIE76 ΔE between the two simulated colours
+
+
+def _to_linear(c: float) -> float:
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _to_srgb(c: float) -> float:
+    c = min(1.0, max(0.0, c))
+    return 12.92 * c if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055
+
+
+def simulate_cvd(rgb: tuple[float, float, float], kind: str) -> tuple[float, float, float]:
+    lin = [_to_linear(v) for v in rgb]
+    m = CVD_MATRICES[kind]
+    out = [sum(m[i][j] * lin[j] for j in range(3)) for i in range(3)]
+    return (_to_srgb(out[0]), _to_srgb(out[1]), _to_srgb(out[2]))
+
+
+def _lab(rgb: tuple[float, float, float]) -> tuple[float, float, float]:
+    r, g, b = (_to_linear(v) for v in rgb)
+    x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047
+    y = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883
+
+    def f(t: float) -> float:
+        return t ** (1 / 3) if t > 216 / 24389 else (24389 / 27 * t + 16) / 116
+
+    fx, fy, fz = f(x), f(y), f(z)
+    return (116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
+
+
+def delta_e(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    la, lb = _lab(a), _lab(b)
+    return math.sqrt(sum((p - q) ** 2 for p, q in zip(la, lb)))
+
+
+def cvd_findings(a: str, b: str) -> list[Finding]:
+    """Can two colours be told apart by readers with colour-vision deficiency? Simulates protan, deutan and
+    tritan (Machado 2009, full severity) and reports the CIE76 ΔE between the two simulated colours."""
+    ca, cb = parse_colour(a), parse_colour(b)
+    rows, data = [f"normal vision: ΔE {delta_e(ca, cb):.1f}"], {"normal": round(delta_e(ca, cb), 2)}
+    worst = ("normal", delta_e(ca, cb))
+    for kind in ("protan", "deutan", "tritan"):
+        sa, sb = simulate_cvd(ca, kind), simulate_cvd(cb, kind)
+        de = delta_e(sa, sb)
+        data[kind] = round(de, 2)
+        verdict = "likely confused" if de < CVD_CONFUSED else "close" if de < CVD_CLOSE else "distinct"
+        rows.append(f"{kind}: {hexc(sa)} vs {hexc(sb)}, ΔE {de:.1f} — {verdict}")
+        if de < worst[1]:
+            worst = (kind, de)
+    sev = "WARN" if worst[1] < CVD_CONFUSED else "INFO"
+    msg = (f"{hexc(ca)} vs {hexc(cb)} (CIE76 ΔE; <{CVD_CONFUSED:g} likely confused, <{CVD_CLOSE:g} close): "
+           + "; ".join(rows) + f". Quote this result as: worst case {worst[0]}, ΔE {worst[1]:.1f}")
+    return [Finding(sev, "cvd", msg + ".", data=data)]
+
+
 def contrast_findings(fg: str, bg: str, size: str = "normal") -> list[Finding]:
     """WCAG 2.x contrast ratio of text colour `fg` on background `bg`, with the AA/AAA verdicts."""
     l1, l2 = relative_luminance(parse_colour(fg)), relative_luminance(parse_colour(bg))
@@ -578,11 +643,8 @@ def _load_rgb(path: str):
     return arr[..., :3].astype("float64")
 
 
-def colour_findings(path: str, box: tuple[int, int, int, int] | None = None, top: int = 8,
-                    min_share: float = 0.002) -> list[Finding]:
-    """The colours actually drawn in a PNG/JPG (or in a pixel box of it), with their share of pixels and
-    their contrast against the most common colour (the background). Use these hex values with `contrast`
-    instead of judging colours by eye."""
+def _box_pixels(path: str, box: tuple[int, int, int, int] | None):
+    """Integer RGB pixels (H×W×3, 0–255) of an image or of a pixel box of it (top-left origin)."""
     import numpy as np
 
     arr = _load_rgb(path)
@@ -594,35 +656,195 @@ def colour_findings(path: str, box: tuple[int, int, int, int] | None = None, top
         if x1 - x0 < 1 or y1 - y0 < 1:
             raise ValueError(f"--box is empty inside a {w}×{h} image")
         arr = arr[y0:y1, x0:x1]
-    px = (np.clip(arr, 0, 1) * 255).round().astype(int).reshape(-1, 3)
-    keys = (px // 8)                                       # bins of 8 levels per channel
-    flat = keys[:, 0] * 1024 + keys[:, 1] * 32 + keys[:, 2]
-    _, inv, counts = np.unique(flat, return_inverse=True, return_counts=True)
-    order = np.argsort(-counts)
+    return (np.clip(arr, 0, 1) * 255).round().astype(int), (w, h)
+
+
+def _is_blend(c, a, b, tol: float = 6.0) -> bool:
+    """Is colour c an anti-aliasing mixture a + t(b − a) with 0.03 < t < 0.97 (within tol levels)?"""
+    import numpy as np
+
+    c, a, b = (np.asarray(x, dtype=float) for x in (c, a, b))
+    d = b - a
+    nn = float(d @ d)
+    if nn < 1:
+        return False
+    t = float((c - a) @ d) / nn
+    if not 0.03 < t < 0.97:
+        return False
+    return float(np.abs(c - (a + t * d)).max()) <= tol
+
+
+def colour_findings(path: str, box: tuple[int, int, int, int] | None = None, top: int = 8,
+                    min_share: float = 0.0002) -> list[Finding]:
+    """The SOLID colours drawn in a PNG/JPG (or a pixel box): exact colours that repeat, with anti-aliased
+    mixtures of two solid colours removed, their share of pixels and contrast against the background (the
+    most common colour). Use `pick` for the colour of one element (a label, a line, a fill)."""
+    import numpy as np
+
+    px, (w, h) = _box_pixels(path, box)
+    flat = px.reshape(-1, 3)
     total = float(len(flat))
-    rows, cols = [], []
-    for k in order[: max(top * 4, 32)]:
-        share = counts[k] / total
-        if share < min_share:
+    uniq, counts = np.unique(flat, axis=0, return_counts=True)
+    order = np.argsort(-counts)
+    min_px = max(12, int(min_share * total))
+    cands = [(tuple(int(v) for v in uniq[k]), int(counts[k])) for k in order if int(counts[k]) >= min_px][:120]
+    if not cands:
+        return [Finding("WARN", "colours", "no solid colour found; try a larger --box.")]
+    bg0 = np.asarray(cands[0][0], dtype=float)
+    img = px.astype(float)
+
+    def far(c) -> float:
+        return float(np.abs(np.asarray(c, dtype=float) - bg0).max())
+
+    def touch(c, b) -> float:
+        """Share of c's pixels that touch a pixel lying farther from the background on the same
+        background→b line (a darker step of the same edge, or b itself)."""
+        d = np.asarray(b, dtype=float) - bg0
+        nn = float(d @ d)
+        t_img = ((img - bg0) @ d) / nn
+        resid = np.abs(img - (bg0 + t_img[..., None] * d)).max(axis=2)
+        t_c = float((np.asarray(c, dtype=float) - bg0) @ d) / nn
+        farther = (resid <= 8) & (t_img > t_c + 0.02)
+        rows = farther.copy()
+        rows[1:, :] |= farther[:-1, :]
+        rows[:-1, :] |= farther[1:, :]
+        grown = rows.copy()                                # 8-neighbourhood: rows, then columns of that
+        grown[:, 1:] |= rows[:, :-1]
+        grown[:, :-1] |= rows[:, 1:]
+        mine = np.all(px == np.asarray(c), axis=2)
+        return float(grown[mine].mean()) if mine.any() else 0.0
+
+    solid: list[tuple[tuple[int, ...], int]] = [cands[0]]
+    for c, n in cands[1:]:
+        if far(c) <= 3:
+            continue                                       # background noise
+        partners = [(b, nb) for b, nb in cands if b != c and far(b) > far(c) and _is_blend(c, cands[0][0], b)]
+        partner = max(partners, key=lambda bn: bn[1]) if partners else None   # the main colour of that edge
+        if partner is not None:
+            adj = touch(c, partner[0])
+            if adj >= 0.8 or (adj >= 0.3 and n <= 0.5 * partner[1]):
+                continue    # an edge mixture: a rim that hugs a farther colour, or a sparse step next to it
+        solid.append((c, n))
+        if len(solid) >= top:
             break
-        mean = px[inv == k].mean(axis=0) / 255.0
-        cols.append(((float(mean[0]), float(mean[1]), float(mean[2])), share))
-        if len(cols) >= top:
-            break
-    if not cols:
-        return [Finding("WARN", "colours", "no colour covers the minimum share; try a larger --box.")]
-    bg = cols[0][0]
+    as_rgb = [((c[0] / 255, c[1] / 255, c[2] / 255), n) for c, n in solid]
+    bg = as_rgb[0][0]
     lb = relative_luminance(bg)
-    for rgb, share in cols:
+    rows = []
+    for rgb, n in as_rgb:
         lc = relative_luminance(rgb)
         ratio = (max(lc, lb) + 0.05) / (min(lc, lb) + 0.05)
-        rows.append(f"{hexc(rgb)}  {share:6.1%} of pixels  contrast vs {hexc(bg)}: {ratio:.2f}:1")
+        rows.append(f"{hexc(rgb)}  {n / total:6.1%} of pixels  contrast vs {hexc(bg)}: {ratio:.2f}:1")
     where = f"box {box}" if box else f"whole image {w}×{h}px"
-    return [Finding("INFO", "colours", f"most common colours ({where}; the first is taken as the background):\n  "
-                    + "\n  ".join(rows) + "\nAnti-aliased edges are mixtures, so thin text may not appear as its own "
-                    "colour: give `--box` around the text. For two marks or series run `contrast A B` with these "
-                    "hex values. Without a ratio, make no claim about how well colours separate.",
-                    data={"colours": [[hexc(c), round(sh, 4)] for c, sh in cols]})]
+    return [Finding("INFO", "colours", f"solid colours ({where}; anti-aliased edge mixtures removed; the first is "
+                    "the background):\n  " + "\n  ".join(rows) + "\nThis lists colours, not which element has "
+                    "which: for the colour of one label, line or fill use `pick --box … --element text|line|fill`. "
+                    "Without a ratio, make no claim about how well colours separate.",
+                    data={"colours": [[hexc(c), round(n / total, 4)] for c, n in as_rgb]})]
+
+
+def _components(mask) -> list[list[tuple[int, int]]]:
+    """4-connected components of a small boolean mask (pure Python, boxes are small)."""
+    h, w = mask.shape
+    seen = [[False] * w for _ in range(h)]
+    comps = []
+    for y in range(h):
+        for x in range(w):
+            if not mask[y, x] or seen[y][x]:
+                continue
+            stack, comp = [(y, x)], []
+            seen[y][x] = True
+            while stack:
+                cy, cx = stack.pop()
+                comp.append((cy, cx))
+                for ny, nx in ((cy + 1, cx), (cy - 1, cx), (cy, cx + 1), (cy, cx - 1)):
+                    if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and not seen[ny][nx]:
+                        seen[ny][nx] = True
+                        stack.append((ny, nx))
+            comps.append(comp)
+    return comps
+
+
+def pick_findings(path: str, box: tuple[int, int, int, int], element: str = "text") -> list[Finding]:
+    """The colour of ONE element inside a pixel box, and its contrast against the box background.
+
+    Background: the most common colour on the box border. Ink pixels are grouped by their direction away
+    from the background (an anti-aliased edge lies on the same direction as its solid colour), and each
+    group is classified by shape: text is several small blobs (glyphs), a line is one long thin run, a fill
+    is one large area. The colour of a group is the median of its most saturated pixels (the solid core),
+    not of its edges. If the requested element is not exactly one group, the answer is 'not determined'."""
+    import numpy as np
+
+    px, _ = _box_pixels(path, box)
+    hh, ww = px.shape[:2]
+    if hh < 3 or ww < 3:
+        raise ValueError("--box must be at least 3×3 px")
+    border = np.concatenate([px[0], px[-1], px[:, 0], px[:, -1]])
+    vals, cnt = np.unique(border, axis=0, return_counts=True)
+    bg = vals[int(np.argmax(cnt))].astype(float)
+    diff = px.astype(float) - bg
+    mag = np.sqrt((diff ** 2).sum(axis=2))
+    ink = mag > 30
+    if int(ink.sum()) < 6:
+        return [Finding("WARN", "pick", f"colour not determined: the box holds only background ({hexc(bg / 255)}). "
+                        "Make no colour or contrast statement for this element.")]
+    ys, xs = np.nonzero(ink)
+    dirs = diff[ys, xs] / mag[ys, xs][:, None]
+    groups: list[dict] = []
+    for i in np.argsort(-mag[ys, xs]):
+        d = dirs[i]
+        for g in groups:
+            if float(g["dir"] @ d) > 0.985:
+                g["idx"].append(i)
+                break
+        else:
+            groups.append({"dir": d, "idx": [i]})
+    found = []
+    for g in groups:
+        idx = np.asarray(g["idx"])
+        if len(idx) < 6:
+            continue
+        m = np.zeros((hh, ww), dtype=bool)
+        m[ys[idx], xs[idx]] = True
+        comps = _components(m)
+        big = max(comps, key=len)
+        by = [p[0] for p in big]
+        bx = [p[1] for p in big]
+        span = max((max(bx) - min(bx) + 1) / ww, (max(by) - min(by) + 1) / hh)
+        thick = len(big) / max(max(bx) - min(bx) + 1, max(by) - min(by) + 1)
+        if span >= 0.6 and thick <= 4:
+            kind = "line"
+        elif len(big) >= 0.25 * hh * ww:
+            kind = "fill"
+        elif len(comps) >= 2 and span < 0.6:
+            kind = "text"
+        else:
+            kind = "other"
+        gm = mag[ys[idx], xs[idx]]
+        core = idx[gm >= np.quantile(gm, 0.85)]
+        core_px = px[ys[core], xs[core]].astype(float)
+        colour = np.median(core_px, axis=0)
+        spread = float(core_px.std(axis=0).max())
+        found.append({"kind": kind, "rgb": colour / 255, "n": len(idx), "spread": spread})
+    wanted = [f for f in found if f["kind"] == element]
+    others = ", ".join(f"{f['kind']} {hexc(f['rgb'])}" for f in found if f["kind"] != element) or "none"
+    if len(wanted) != 1:
+        what = "no" if not wanted else f"{len(wanted)}"
+        return [Finding("WARN", "pick", f"colour not determined: {what} {element} element(s) in the box (other ink: "
+                        f"{others}). Tighten the box around the one {element}, or make no colour or contrast "
+                        "statement for it.")]
+    f = wanted[0]
+    if f["spread"] > 14:
+        return [Finding("WARN", "pick", f"colour not determined: the {element} has no uniform core (spread "
+                        f"{f['spread']:.0f} levels: gradient or heavy anti-aliasing). Make no contrast statement.")]
+    fg = (float(f["rgb"][0]), float(f["rgb"][1]), float(f["rgb"][2]))
+    bgc = (float(bg[0]) / 255, float(bg[1]) / 255, float(bg[2]) / 255)
+    lf_, lb = relative_luminance(fg), relative_luminance(bgc)
+    ratio = (max(lf_, lb) + 0.05) / (min(lf_, lb) + 0.05)
+    return [Finding("INFO", "pick", f"{element} colour {hexc(fg)} on background {hexc(bgc)} (box border): contrast "
+                    f"{ratio:.2f}:1. Other ink in the box: {others}. Quote this result as: {element} {hexc(fg)} on "
+                    f"{hexc(bgc)}, contrast {ratio:.2f}:1.", data={"colour": hexc(fg), "background": hexc(bgc),
+                                                                   "ratio": round(ratio, 3)})]
 
 
 def blob_findings(path: str, min_px: int = 30, colour: str | None = None, tol: float = 0.12) -> list[Finding]:
@@ -1650,6 +1872,15 @@ def main(argv=None, cross_check: bool = False) -> int:
     q.add_argument("--box", nargs=4, type=int, metavar=("X0", "Y0", "X1", "Y1"), help="pixel box, top-left origin")
     q.add_argument("--top", type=int, default=8)
 
+    q = sub.add_parser("pick", help="colour of one element (text, line, fill) in a pixel box, or 'not determined'")
+    q.add_argument("path")
+    q.add_argument("--box", nargs=4, type=int, required=True, metavar=("X0", "Y0", "X1", "Y1"))
+    q.add_argument("--element", choices=("text", "line", "fill"), default="text")
+
+    q = sub.add_parser("cvd", help="colour-vision deficiency: ΔE between two colours as protan/deutan/tritan see them")
+    q.add_argument("a")
+    q.add_argument("b")
+
     q = sub.add_parser("contrast", help="WCAG 2.x contrast ratio of a text colour on a background, AA/AAA")
     q.add_argument("fg", help="text colour, e.g. #555555")
     q.add_argument("bg", help="background colour, e.g. #ffffff")
@@ -1695,6 +1926,10 @@ def main(argv=None, cross_check: bool = False) -> int:
             fs = lfmax_findings(parse_series(a.series), a.baseline, a.encoding, a.mark)
         elif a.cmd == "colours":
             fs = colour_findings(a.path, tuple(a.box) if a.box else None, a.top)
+        elif a.cmd == "pick":
+            fs = pick_findings(a.path, tuple(a.box), a.element)
+        elif a.cmd == "cvd":
+            fs = cvd_findings(a.a, a.b)
         elif a.cmd == "contrast":
             fs = contrast_findings(a.fg, a.bg, a.size)
         elif a.cmd == "scaling":

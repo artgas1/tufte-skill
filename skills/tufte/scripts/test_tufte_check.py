@@ -723,3 +723,91 @@ def test_colours_read_from_png(tmp_path):
     assert any(tc.rgb_dist(tc.parse_colour(c), tc.parse_colour("#fdae61")) < 0.03 for c in found)
     # the two series separate in grayscale: contrast between them well above 3:1
     assert tc.contrast_findings("#1b3a6b", "#fdae61")[0].data["ratio"] > 6
+
+
+# ------------------------------------------------------------------ v1.4.1: colours of the requested element, CVD
+
+
+def _render(tmp_path, name, draw, size=(3, 0.6)):
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure(figsize=size, dpi=110)
+    draw(fig)
+    p = tmp_path / name
+    fig.savefig(p)
+    plt.close(fig)
+    return str(p)
+
+
+def _near(hexa: str, hexb: str, levels: int = 3) -> bool:
+    a, b = tc.parse_colour(hexa), tc.parse_colour(hexb)
+    return max(abs(x - y) for x, y in zip(a, b)) * 255 <= levels
+
+
+def _text_and_line(fig):
+    from matplotlib.lines import Line2D
+
+    fig.text(0.05, 0.3, "Источник: данные 2025", color="#555555", fontsize=8)
+    fig.add_artist(Line2D([0.0, 1.0], [0.85, 0.85], color="#d95f02", linewidth=2.5, transform=fig.transFigure))
+
+
+def test_colours_lists_solid_colours_not_edge_mixtures(tmp_path):
+    p = _render(tmp_path, "tl.png", _text_and_line)
+    listed = [c for c, _ in tc.colour_findings(p)[0].data["colours"]]
+    truth = ["#ffffff", "#d95f02", "#555555"]
+    assert all(any(_near(c, t) for t in truth) for c in listed), listed     # 1.4 listed the edge #dc6d18
+    assert any(_near(c, "#d95f02") for c in listed) and any(_near(c, "#555555") for c in listed)
+
+
+def test_colours_keeps_a_light_tint_fill(tmp_path):
+    from matplotlib.patches import Rectangle
+
+    def draw(fig):
+        fig.add_artist(Rectangle((0.05, 0.1), 0.4, 0.8, color="#9ebcda", transform=fig.transFigure))
+        fig.add_artist(Rectangle((0.55, 0.1), 0.4, 0.8, color="#1b5e9e", transform=fig.transFigure))
+
+    listed = [c for c, _ in tc.colour_findings(_render(tmp_path, "tint.png", draw, (3, 1.5)))[0].data["colours"]]
+    assert any(_near(c, "#9ebcda") for c in listed) and any(_near(c, "#1b5e9e") for c in listed)
+
+
+def test_pick_takes_the_label_not_the_neighbouring_line(tmp_path):
+    p = _render(tmp_path, "tl.png", _text_and_line)
+    text = tc.pick_findings(p, (0, 0, 330, 66), "text")[0]
+    assert text.severity == "INFO" and _near(text.data["colour"], "#555555")
+    assert abs(text.data["ratio"] - 7.46) < 0.15                            # not the line's 3.76
+    line = tc.pick_findings(p, (0, 0, 330, 66), "line")[0]
+    assert _near(line.data["colour"], "#d95f02") and abs(line.data["ratio"] - 3.76) < 0.1
+
+
+def test_pick_says_not_determined_instead_of_a_number(tmp_path):
+    def two_texts(fig):
+        fig.text(0.05, 0.3, "Источник", color="#555555", fontsize=8)
+        fig.text(0.6, 0.3, "прогноз", color="#b2182b", fontsize=8)
+
+    p = _render(tmp_path, "two.png", two_texts)
+    f = tc.pick_findings(p, (0, 0, 330, 66), "text")[0]
+    assert f.severity == "WARN" and "not determined" in f.message and not f.data
+    blank = _render(tmp_path, "blank.png", lambda fig: None)
+    assert "not determined" in tc.pick_findings(blank, (0, 0, 330, 66), "text")[0].message
+
+
+def test_pick_fill_core_colour(tmp_path):
+    from matplotlib.patches import Rectangle
+
+    def draw(fig):
+        fig.add_artist(Rectangle((0.2, 0.2), 0.6, 0.6, color="#df9a56", transform=fig.transFigure))
+
+    f = tc.pick_findings(_render(tmp_path, "fill.png", draw, (2, 2)), (0, 0, 220, 220), "fill")[0]
+    assert _near(f.data["colour"], "#df9a56") and abs(f.data["ratio"] - 2.36) < 0.05
+
+
+def test_cvd_red_green_confused_for_deutan_blue_orange_distinct():
+    rg = tc.cvd_findings("#d62728", "#2ca02c")[0]
+    assert rg.severity == "WARN" and rg.data["deutan"] < tc.CVD_CONFUSED
+    bo = tc.cvd_findings("#1f77b4", "#ff7f0e")[0]
+    assert bo.severity == "INFO" and min(bo.data[k] for k in ("protan", "deutan", "tritan")) > tc.CVD_CLOSE
+    # same luminance is not the same as confusable: red and blue of equal lightness stay distinct
+    rb = tc.cvd_findings("#b2182b", "#1b5e9e")[0]
+    assert rb.severity == "INFO" and tc.contrast_findings("#b2182b", "#1b5e9e")[0].data["ratio"] < 1.1
+    grey = tc.simulate_cvd(tc.parse_colour("#777777"), "deutan")
+    assert _near(tc.hexc(grey), "#777777", 2)

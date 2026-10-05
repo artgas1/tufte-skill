@@ -43,7 +43,9 @@ python3 /abs/path/to/skill/scripts/tufte_check.py image chart.png --then lf --da
 | `lf --data A B --baseline X --mark bar` | Lie Factor from two values you read (`--mark line`/`point` answers "not applicable"). `--encoding both-dims`/`radius` when linear size ∝ value, `volume` for 3-D; `--measured D1 D2 --measure diameter` for sizes measured in pixels. |
 | `lfmax --mark bar --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart Lie Factor — the strongest distortion over every pair of marks, across series too — plus each series' own LF. `--mark line`/`point`/`dumbbell` answers "not applicable". |
 | `lf --bound …` | Values unreadable: `--baseline B --axis-max T` gives LF ≥ T/(T−B) for bars from B; `--encoding radius` gives LF ≥ 2, but only when you know linear size ∝ value (a legend says so) — growing width and height alone do not prove it; bare `--bound` tells you to report "cannot be computed". |
-| `colours chart.png [--box X0 Y0 X1 Y1]` | The colours actually drawn (hex, share of pixels, contrast against the background). Feed them to `contrast`. |
+| `pick chart.png --box X0 Y0 X1 Y1 --element text\|line\|fill` | The colour of ONE element in the box (its solid core, not edges) and its contrast with the box background, or "not determined". |
+| `colours chart.png [--box …]` | The solid colours drawn in an image (edge mixtures removed), not which element has which. |
+| `cvd A B` | Two colours as protan, deutan and tritan readers see them: ΔE and "likely confused / close / distinct". |
 | `contrast FG BG [--size large]` | WCAG 2.x contrast ratio of a text colour on its background, with AA/AAA verdicts. The only basis for a contrast claim. |
 | `time L1 L2 …` | Are labels drawn evenly also even in time? `--positions` if the spacing is not even. |
 
@@ -140,14 +142,28 @@ Three rules make the reading trustworthy:
   silently missing period, is a finding.
 - **Every other number you state** (growth multiples, sums of percentages, differences): compute
   it, do not estimate it. Percent labels of one pie must sum to 100.
-- **Colours: no judgement by eye.** Any statement about how well colours separate — text on its
-  background, shapes, shaded 3-D faces, two series, grayscale print — needs a ratio from `contrast`
-  quoted in the finding. Get the colours from the source code or spec; with only an image, read them
-  with `colours chart.png` (add `--box X0 Y0 X1 Y1` around text or a face) and pass the hex values to
-  `contrast`. Text needs 4.5:1 (AA), large text 3:1; two marks or series are distinguishable in
-  grayscale at 3:1 or more. No ratio — no statement, not even "faces almost merge with the
-  background" or "the series are hard to tell apart". Grey text often passes: #555555 on white is
-  7.46:1.
+- **Colours: no judgement by eye — negative or positive.** Any statement about how well colours
+  separate needs a number from the tool, quoted in the same sentence: pale, faded, low-contrast,
+  merges, blends in, hard to tell apart, collides in grayscale, confuses colour-blind readers — and
+  equally "the colours are distinct", "contrasting colours", "readable grey". This includes the "why
+  it matters" lines: do not add "especially in black-and-white print or on a projector" or "for
+  colour-blind readers" without a number. Without the number these phrases are forbidden: "the
+  footnote is pale", "small and grey", "the base of the gradient merges", "A and D are easy to confuse
+  in grey", "hard for colour-blind readers", "the lines will merge for readers with impaired colour
+  vision", "the colours are distinct", «сноска бледная», «мелко и серым», «сливается», «бледнеет до
+  фона», «легко спутать в сером», «мешает читателям с нарушениями цветовосприятия», «сольются при
+  нарушении цветового зрения», «цвета различимы», «цвета контрастные». A gradient is a finding as
+  decoration (Data-ink); how far its base fades needs `pick` like any other colour.
+  - Colour of an element: from the source code or spec; with only an image, `pick chart.png --box X0
+    Y0 X1 Y1 --element text|line|fill` with a box around that one element. It takes the solid core
+    (not anti-aliased edges) and ignores other ink in the box. If it answers "not determined", make no
+    colour statement about that element. `colours` lists the solid colours of an image but not which
+    element has which, so do not take an element's colour from it.
+  - Text on its background: `contrast FG BG` (AA: 4.5:1, large text 3:1). Two marks or series in
+    grayscale: `contrast A B` (distinguishable at 3:1 or more). Readers with colour-vision deficiency:
+    `cvd A B` — claim confusion only when its worst-case ΔE is below 10, and quote it.
+  - If `pick` answers "not determined" and the source is not available, make no statement about that
+    element's colour — do not substitute a colour read by eye or a number from an example.
 
 ### 4. Judge with the rubric
 List only rows that actually fail. Page numbers point to `references/canon.md`.
@@ -167,7 +183,8 @@ List only rows that actually fail. Page numbers point to `references/canon.md`.
   At most mention them as acknowledged choices (with the `lf` output for reference), never as
   defects.
 - **Judgments outside this rubric**: the data are old, the topic or the business conclusion, what
-  else the author "should" have shown, personal taste. If no row fails, the verdict is "no" and
+  else the author "should" have shown, personal taste, typography conventions (a space before "%",
+  quote marks, dashes, non-breaking spaces, capitalisation) — the rubric does not check them. If no row fails, the verdict is "no" and
   the findings list is empty or holds only minor ink notes.
 
 | Area | Question | Fails when |

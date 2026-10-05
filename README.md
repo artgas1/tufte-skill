@@ -39,7 +39,9 @@ script before rendering.
 | `lf --bound [--baseline B --axis-max T \| --encoding radius]` | When values are unreadable: LF ≥ T/(T−B) for bars from a non-zero baseline (for bars LF = v/(v−B), v the smaller value); LF ≥ 2 when linear size ∝ value; otherwise "cannot be computed" |
 | `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels |
 | `scaling --values … --sizes …` | Fits the rule that maps values to measured sizes (radius ∝ value vs area ∝ value), robust to anti-aliasing on small shapes, and gives the LF for smallest→largest |
-| `colours chart.png [--box X0 Y0 X1 Y1]` | The colours actually drawn in an image or a pixel box: hex, share of pixels, contrast against the background — the input for `contrast` when there is no source |
+| `pick chart.png --box X0 Y0 X1 Y1 --element text\|line\|fill` | The colour of one element in a pixel box — its solid core, not its anti-aliased edges, and not other ink in the box — with its contrast against the box background, or "not determined" |
+| `colours chart.png [--box …]` | The solid colours drawn in an image (edge mixtures removed); does not say which element has which |
+| `cvd A B` | Two colours as protan, deutan and tritan readers see them (Machado 2009, full severity): CIE76 ΔE and "likely confused" below 10 |
 | `contrast FG BG [--size large]` | WCAG 2.x contrast ratio of a text colour on its background with AA/AAA verdicts; the skill makes no contrast claim without it |
 | `time LABEL...` | Time labels drawn evenly but uneven in time; missing periods |
 | `image chart.png` | What pixels can tell: aspect ratio, colour-coded axes, colour sets of repeated panels. Says plainly that integrity cannot be computed from pixels |
@@ -51,7 +53,7 @@ script before rendering.
 Several commands run in one process with `--then`
 (`image chart.png --then lf --data 410 520 --baseline 400`).
 
-Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (73 tests) — every check has a
+Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (79 tests) — every check has a
 negative control (silent on a clean chart, fires on a broken one). Lint: `ruff check .` and
 `pyright skills/tufte/scripts evals` are clean.
 
@@ -72,7 +74,7 @@ or in `.claude/settings.json`:
 }
 ```
 
-To pin a release, add `"ref": "tufte-skill--v1.4.0"` (or another release tag) next to `"repo"`. Settings alone register
+To pin a release, add `"ref": "tufte-skill--v1.4.1"` (or another release tag) next to `"repo"`. Settings alone register
 the marketplace; run `claude plugin install tufte-skill@tufte-skill` once to install the plugin.
 
 **As a plain skill**: copy `skills/tufte/` to `~/.claude/skills/tufte/`.
@@ -473,9 +475,63 @@ faces at 1.51:1). 1.3 reproduced class (1) here on both models; class (3) did no
 F18 drew no false truncation finding from any version. Plugin-eval regression (F7, F17): all graders
 passed.
 
-**Held-out acceptance of 1.4:** pending at the time of this commit.
+**Held-out acceptance of 1.4: one criterion short.** On both models: defects found, LF 16/16, "N times"
+on position encodings 0/19, cost; on Sonnet 0.57 fewer false statements than 1.0; auto-loading 96/96. The
+miss: colour statements on Sonnet that carry a number and are right — 0.895 against a threshold of 0.90.
+Classes, without fixture details: (1) `colours` on an image took a neighbouring line instead of the text
+(3.76 instead of 4.87) and an anti-aliased edge pixel (6.04 instead of the true value); (2) colour
+statements without a number — "the base of the gradient merges", "the footnote is pale", "small and
+grey", "A and D are easy to confuse in grey", and on both models "the lines will merge for readers with
+impaired colour vision"; (3) on Opus, a typography nit ("18% without a space") outside the rubric.
+
+## Version 1.4.1
+
+**What changed.**
+- **`pick`** returns the colour of one element in a pixel box — text, line or fill — from its solid core,
+  ignores other ink in the box, and answers "not determined" (with no number) when the box holds no such
+  element, two of them, or no uniform core.
+- **`colours`** lists only solid colours: exact colours that repeat, with anti-aliased edge mixtures
+  removed by a spatial test (a mixture hugs a farther colour of the same edge); a light tint fill is kept.
+- **`cvd A B`** simulates protan, deutan and tritan vision (Machado, Oliveira & Fernandes 2009, full
+  severity, linear sRGB) and reports the CIE76 ΔE between the two simulated colours.
+- **SKILL.md**: any statement about paleness, merging, grayscale or colour-vision deficiency needs a
+  number from `contrast`, `pick` or `cvd`; the unnumbered phrases above are listed as forbidden. An
+  element's colour comes from the source or `pick`, never from the `colours` list. Typography conventions
+  are outside the rubric.
+
+**Tests.** 79, six of them new for 1.4.1; five fail against the 1.4 script (edge mixtures in `colours`,
+`pick` on a label next to a line, "not determined", a fill core, CVD), one — a light tint kept — passes on
+both by design.
+
+**Development check** (`evals/dev7/`, written before rendering: F20 two lines of equal lightness —
+1.03:1 between them, distinct for colour-blind readers, ΔE 57 — and a #555555 footnote; F21 gradient
+bars with red and green categories — deutan ΔE 7.3 — and a #999999 footnote at 2.85:1). Every
+statement about colours separating was judged by hand: numbered with a value within 5% of the
+reference and a conclusion that follows from it, or not.
+
+| Colour statements numbered and right | Sonnet (5 runs per chart) | Opus (2 runs per chart) |
+|---|---|---|
+| 1.4.1 | 7/10 = 0.70 | 6/8 = 0.75 |
+| 1.4 | 12/22 = 0.55 | 8/9 = 0.89 |
+
+1.4's misses were mostly unnumbered claims about colour-blind readers ("the lines will merge" — false
+here, ΔE 57) and "the gradient base merges"; 1.4.1 made far fewer colour statements and its misses were
+unnumbered *positive* claims ("the colours are distinct", "contrasting colours") and grayscale asides
+in "why it matters" lines. Opus's drop is two such asides in eight statements — small numbers. After
+these runs the rule was extended to positive claims and "why it matters" lines; two further Sonnet runs
+on F20 made only numbered statements (2/2), but one of them reused the example ratio printed in the
+skill after `pick` could not separate the footnote, so that example was removed. Those two runs are a
+spot check, not a measurement; the extended rule is not measured beyond them.
 
 ## Changelog
+
+**1.4.1**
+- `pick`: the colour of one element (text, line, fill) from its solid core, or "not determined".
+- `colours`: solid colours only, anti-aliased edge mixtures removed.
+- `cvd`: protan/deutan/tritan simulation with ΔE.
+- Colour statements (pale, merging, grayscale, colour-vision deficiency) only with a number; typography
+  conventions are outside the rubric.
+- `evals/dev7/` and plugin-eval cases F20–F21.
 
 **1.4.0**
 - A tick label is not a truncation mark: unmarked starts are a finding (with LF on bars, without any
