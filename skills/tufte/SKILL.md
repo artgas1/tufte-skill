@@ -30,18 +30,18 @@ network). Call it as **one command that starts with `python3` and the full absol
 `python3`, and every refused call costs a turn. Chain several checks in one call with `--then`:
 
 ```
-python3 /abs/path/to/skill/scripts/tufte_check.py image chart.png --then lf --data 120 150 --baseline 100 --then time 2000 2005 2010 2011
+python3 /abs/path/to/skill/scripts/tufte_check.py image chart.png --then lf --data 120 150 --baseline 100 --mark bar --then time 2000 2005 2010 2011
 ```
 
 | Command | Use |
 |---|---|
 | `image chart.png` | Image only. Aspect ratio, colour-coded axes, colour sets of the left/right halves. It cannot compute integrity from pixels. |
-| `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels: box width/height, area. |
+| `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels: box width/height, area. Feed all of them to `scaling`. |
 | `scaling --values … --sizes …` | Fits which rule maps values to measured sizes (radius ∝ value or area ∝ value) and gives the LF for smallest→largest. |
 | `figure plot.py` | Runs a matplotlib script (show/close disabled) and checks every figure: bar baselines with Lie Factor (per series and chart-wide), dual-axis colours, category colours across panels, time spacing, pies, grid, 3-D, smoothing, area fills, icon scaling, titles. |
 | `spec chart.json` | Vega-Lite spec or Plotly figure JSON: the same checks where the spec allows. |
-| `lf --data A B --baseline X` | Lie Factor from two values you read. `--encoding both-dims`/`radius` when linear size ∝ value, `volume` for 3-D; `--measured D1 D2 --measure diameter` for sizes measured in pixels. |
-| `lfmax --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart Lie Factor — the strongest distortion over every pair of marks, across series too — plus each series' own LF. |
+| `lf --data A B --baseline X --mark bar` | Lie Factor from two values you read (`--mark line`/`point` answers "not applicable"). `--encoding both-dims`/`radius` when linear size ∝ value, `volume` for 3-D; `--measured D1 D2 --measure diameter` for sizes measured in pixels. |
+| `lfmax --mark bar --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart Lie Factor — the strongest distortion over every pair of marks, across series too — plus each series' own LF. `--mark line`/`point` answers "not applicable". |
 | `lf --bound …` | Values unreadable: `--baseline B --axis-max T` gives LF ≥ T/(T−B) for bars from B; `--encoding radius` gives LF ≥ 2, but only when you know linear size ∝ value (a legend says so) — growing width and height alone do not prove it; bare `--bound` tells you to report "cannot be computed". |
 | `time L1 L2 …` | Are labels drawn evenly also even in time? `--positions` if the spacing is not even. |
 
@@ -89,26 +89,36 @@ Three rules make the reading trustworthy:
   cannot tell where two lines cross, write "unreadable" and build nothing on it.
 
 ### 3. Compute from the reading
-- **Lie Factor** for every magnitude that is not a plain length from zero — truncated bars, icons,
-  bubbles, areas, 3-D, pictograms. LF = (size of effect shown) / (size of effect in data), effect =
-  (second − first) / first (VDQI p. 57). Distortion starts outside 0.95–1.05.
-  - **Every LF number comes from the tool.** Run `lf` (or `scaling`/`lf --bound`), and in the
+- **Lie Factor** for every magnitude drawn as a length or an area — truncated bars, lollipops,
+  areas filled to a baseline, icons, bubbles, 3-D, pictograms. LF = (size of effect shown) / (size of
+  effect in data), effect = (second − first) / first (VDQI p. 57). Distortion starts outside 0.95–1.05.
+  - **Every LF number comes from the tool.** Run `lf` (or `lfmax`/`scaling`/`lf --bound`), and in the
     finding quote the command and the line it printed. An LF you worked out in your head, a ratio
     of ratios, or "≈16× by area, ≈4× by diameter" is not an LF: if you did not run the tool, state
     no LF number.
-  - **Truncated bars:** `lf --data V1 V2 --baseline B`. For bars LF = v/(v − B) with v the smaller
-    value, so the exact value of the larger bar barely matters.
-  - **Several series on one truncated axis:** readers compare bars across series, not only within
-    one. Run `lfmax` with every value of every series (`--series Email=3.9,4.2 --series Ads=2.4,2.8
-    --baseline 2`). The **headline LF is the chart LF it prints** (the smallest bar against any larger
-    one); per-series LFs go after it as detail. Same for bubbles or icons of several series: pass all
-    shapes of the panel to `scaling` at once. `figure`/`spec` print the chart LF themselves
-    (`lie-factor-max`).
+  - **One LF per encoding.** Each encoding on the chart (the bars, the circles of a panel) gets exactly
+    one LF. Take it from the most direct measurement: for shapes, `scaling` over sizes from `blobs`;
+    for bars, `lfmax` (several series) or `lf`. If you ran two methods for the same marks, quote one —
+    `scaling` beats `lf --measured` and an assumed `--encoding radius` — and say in one clause why. A
+    call that chains `scaling` with `lf` prints the `lf` result as a cross-check: do not quote it.
+  - **Lines and points: no LF.** A line, a dot plot, a scatter or a slope chart encodes by position;
+    a value axis that starts above zero moves the marks but inflates no drawn magnitude. Write "LF not
+    applicable (position encoding)" and state no LF, no "N× exaggerated". A labelled start is a
+    disclosed choice; an unlabelled one is at most a Labels note.
+  - **Truncated bars:** `lf --data V1 V2 --baseline B --mark bar`. For bars LF = v/(v − B) with v
+    the smaller value, so the exact value of the larger bar barely matters.
+  - **Several series on one truncated axis** (bars, lollipops, areas to a baseline): readers compare
+    marks across series, not only within one. Run `lfmax --mark bar` with **every value of every
+    series, in drawing order** — all categories, not the first and last: a series minimum in the
+    middle sets the chart LF (`--series 2024=72,70,63.5,69,74 --series 2025=75,76,71,73,78 --baseline
+    60`). The **headline LF is the chart LF it prints**; per-series LFs go after it as detail. It
+    echoes how many values it received per series: check that against the chart. `figure`/`spec`
+    print the chart LF themselves (`lie-factor-max`, bars only).
   - **Circles, bubbles, icons:** read the printed values, measure the shapes with `blobs` (box width
-    = diameter), then `scaling --values v1 v2 … --sizes d1 d2 …` (all shapes of one panel, same
-    order). It fits the rule — radius ∝ value means area ∝ value² — and prints one LF; small shapes
-    carry 1–2 px of anti-aliasing error, so prefer `scaling` over a two-shape `lf --measured`.
-    Report that one number.
+    = diameter), then `scaling --values v1 v2 … --sizes d1 d2 …` with **all** shapes of the panel in
+    the same order. It fits the rule — radius ∝ value means area ∝ value² — and prints one LF. Sizes
+    come only from `blobs` output, never from estimating by eye: small shapes carry 1–2 px of
+    anti-aliasing error, and a size guessed from the picture can halve the LF. Report that one number.
   - **Values not readable** (no numbers on the axis and no labels; 3-D or perspective that hides
     the baseline): do not estimate values — not even "about 60" or "roughly twice". Write "LF cannot
     be computed: the values are not readable". If the axis range is readable for bars from a

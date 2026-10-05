@@ -117,3 +117,32 @@ base,,F7,sonnet,r1,,,,,,,,,,0.1257,True,dev3,,,
 base,,F7,sonnet,r2,,,,,,,,,,0.1164,False,dev3,,,
 base,,F8,sonnet,r1,,,,,,,,,,0.1258,True,dev3,,,
 base,,F8,sonnet,r2,,,,,,,,,,0.1369,True,dev3,,,
+skill,1.2.0-dev,F10,opus,r1,,,,,,,,,,0.3239,True,dev4,9.00,True,True
+skill,1.2.0-dev,F10,opus,r2,,,,,,,,,,0.2934,True,dev4,9.00,True,True
+base,,F10,sonnet,r1,,,,,,,,,,0.1667,False,dev4,none,False,
+skill,1.0.0,F10,sonnet,r1,,,,,,,,,,0.1575,True,dev4,9.00,True,True
+skill,1.0.0,F10,sonnet,r2,,,,,,,,,,0.1499,True,dev4,9.00,True,True
+skill,1.1.0,F10,sonnet,r1,,,,,,,,,,0.1625,True,dev4,9.00,True,True
+skill,1.1.0,F10,sonnet,r2,,,,,,,,,,0.1561,True,dev4,9.00,True,True
+skill,1.2.0-dev,F10,sonnet,r1,,,,,,,,,,0.1569,True,dev4,9.00,True,True
+skill,1.2.0-dev,F10,sonnet,r2,,,,,,,,,,0.1388,True,dev4,9.00,True,True
+skill,1.1.0,F11,opus,r1,,,,,,,,,,0.2952,True,dev4,"not applicable / none",True,True
+skill,1.2.0-dev,F11,opus,r1,,,,,,,,,,0.2669,True,dev4,"not applicable / none",True,True
+skill,1.2.0-dev,F11,opus,r2,,,,,,,,,,0.2787,True,dev4,"not applicable / none",True,True
+base,,F11,sonnet,r1,,,,,,,,,,0.1278,False,dev4,none,True,
+skill,1.0.0,F11,sonnet,r1,,,,,,,,,,0.1450,True,dev4,"not applicable / none",True,True
+skill,1.0.0,F11,sonnet,r2,,,,,,,,,,0.1373,True,dev4,"not applicable / none",True,True
+skill,1.1.0,F11,sonnet,r1,,,,,,,,,,0.1342,True,dev4,"not applicable / none",True,True
+skill,1.1.0,F11,sonnet,r2,,,,,,,,,,0.1340,True,dev4,"not applicable / none",True,True
+skill,1.2.0-dev,F11,sonnet,r1,,,,,,,,,,0.1724,True,dev4,"not applicable / none",True,True
+skill,1.2.0-dev,F11,sonnet,r2,,,,,,,,,,0.1283,True,dev4,"not applicable / none",True,False
+skill,1.1.0,F12,opus,r1,,,,,,,,,,0.3235,True,dev4,18.14,True,True
+skill,1.2.0-dev,F12,opus,r1,,,,,,,,,,0.2955,True,dev4,18.14,True,True
+skill,1.2.0-dev,F12,opus,r2,,,,,,,,,,0.3059,True,dev4,18.14,True,True
+base,,F12,sonnet,r1,,,,,,,,,,0.1391,False,dev4,none,False,
+skill,1.0.0,F12,sonnet,r1,,,,,,,,,,0.1518,True,dev4,"5–18 (range)",False,True
+skill,1.0.0,F12,sonnet,r2,,,,,,,,,,0.1364,True,dev4,"list, no headline",False,True
+skill,1.1.0,F12,sonnet,r1,,,,,,,,,,0.1661,True,dev4,18.14,True,True
+skill,1.1.0,F12,sonnet,r2,,,,,,,,,,0.1361,True,dev4,18.14,True,True
+skill,1.2.0-dev,F12,sonnet,r1,,,,,,,,,,0.1424,True,dev4,18.14,True,True
+skill,1.2.0-dev,F12,sonnet,r2,,,,,,,,,,0.1525,True,dev4,18.14,True,True

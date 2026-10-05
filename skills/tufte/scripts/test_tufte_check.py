@@ -517,7 +517,77 @@ def test_plotly_multi_trace_truncated_bars():
 
 
 def test_cli_lfmax(capsys):
-    code = tc.main(["lfmax", "--series", "Email=3.9,4.2", "--series", "Ads=2.4,2.8", "--baseline", "2"])
+    code = tc.main(["lfmax", "--series", "Email=3.9,4.2", "--series", "Ads=2.4,2.8", "--baseline", "2",
+                    "--mark", "bar"])
     out = capsys.readouterr().out
     assert code == 1 and "chart LF = 6.00" in out
-    assert tc.main(["lfmax", "--series", "bad"]) == 2
+    assert tc.main(["lfmax", "--series", "bad", "--mark", "bar"]) == 2
+
+
+# ------------------------------------------------------------------ v1.2: one LF per encoding, marks, all values
+
+
+def test_lfmax_finds_a_minimum_in_the_middle_of_a_series():
+    series = {"2024": [72, 70, 63.5, 69, 74], "2025": [75, 76, 71, 73, 78]}
+    head = tc.lfmax_findings(series, baseline=60)[0]
+    assert abs(head.data["lie_factor"] - 63.5 / 3.5) < 1e-3 and head.data["pair"][0] == ["2024", 63.5]
+    # negative control: first and last values only miss it
+    ends = tc.lfmax_findings({"2024": [72, 74], "2025": [75, 78]}, baseline=60)[0]
+    assert ends.data["lie_factor"] < 7
+
+
+def test_lfmax_warns_when_series_lengths_differ():
+    assert "lie-factor-input" in checks(tc.lfmax_findings({"A": [72, 74], "B": [75, 76, 71, 73, 78]}, baseline=60))
+    assert "lie-factor-input" not in checks(tc.lfmax_findings({"A": [72, 70, 74], "B": [75, 71, 78]}, baseline=60))
+
+
+def test_lfmax_and_lf_silent_for_position_marks():
+    series: dict[str, list[float]] = {"A": [64.0, 76.0], "B": [62.0, 72.0]}
+    bars = tc.lfmax_findings(series, baseline=60, mark="bar")
+    assert bars[0].severity == "ERROR"                          # negative control: bars from 60 do distort
+    lines = tc.lfmax_findings(series, baseline=60, mark="line")
+    assert [f.check for f in lines] == ["lie-factor-not-applicable"]
+    assert all(f.severity == "INFO" and "Quote this result" not in f.message for f in lines)
+
+
+def test_cli_lf_position_mark(capsys):
+    assert tc.main(["lf", "--data", "64", "76", "--baseline", "60", "--mark", "line"]) == 0
+    out = capsys.readouterr().out
+    assert "not applicable" in out and "LF =" not in out
+    assert tc.main(["lf", "--data", "64", "76", "--baseline", "60", "--mark", "bar"]) == 1
+
+
+def test_figure_lines_on_truncated_axis_have_no_lie_factor(tmp_path):
+    body = """
+    fig, ax = plt.subplots()
+    ax.plot(range(12), [64, 65, 66, 66, 68, 69, 71, 70, 72, 73, 74, 76], label='A')
+    ax.plot(range(12), [62, 62, 63, 65, 64, 66, 67, 68, 68, 69, 71, 72], label='B')
+    ax.set_ylim(60, 80)
+    """
+    fs = run_fig(tmp_path, body)
+    assert not checks(fs) & {"lie-factor-max", "bar-baseline", "lie-factor"}
+
+
+def _quoted(out: str) -> list[str]:
+    return [ln for ln in out.splitlines() if "Quote this result as" in ln]
+
+
+@pytest.mark.parametrize("order", ["scaling-first", "lf-first"])
+def test_one_lie_factor_per_size_encoding(capsys, order):
+    scaling = ["scaling", "--values", "12", "24", "48", "96", "--sizes", "13", "26", "49", "94"]
+    measured = ["lf", "--data", "12", "96", "--measured", "15", "94", "--measure", "diameter"]
+    parts = [scaling, measured] if order == "scaling-first" else [measured, scaling]
+    tc.main_chain(parts[0] + ["--then"] + parts[1])
+    out = capsys.readouterr().out
+    quoted = _quoted(out)
+    assert len(quoted) == 1 and "scaling" not in quoted[0] and "fit over 4 shapes" in quoted[0]
+    assert "Cross-check only" in out
+    # negative control: on its own, lf --measured does quote its number
+    tc.main_chain(measured)
+    assert len(_quoted(capsys.readouterr().out)) == 1
+
+
+def test_chain_keeps_bar_lf_next_to_scaling(capsys):
+    tc.main_chain(["scaling", "--values", "1", "2", "4", "--sizes", "1", "2", "4", "--then",
+                   "lf", "--data", "410", "520", "--baseline", "400"])
+    assert len(_quoted(capsys.readouterr().out)) == 2   # different encodings: each has its own LF

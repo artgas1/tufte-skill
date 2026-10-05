@@ -35,7 +35,7 @@ script before rendering.
 | Command | What it checks |
 |---|---|
 | `lf --data A B [--baseline X \| --encoding radius \| --measured D1 D2 --measure diameter]` | Lie Factor (VDQI p. 57) for truncated axes and size encodings; prints a "Quote this result as" line |
-| `lfmax --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart-wide LF — the strongest distortion over every pair of marks, across series too (for bars from a baseline B: the smallest bar against any larger one, v_min/(v_min−B)) — plus each series' own LF |
+| `lfmax --mark bar --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart-wide LF — the strongest distortion over every pair of marks, across series too (for bars from a baseline B: the smallest bar against any larger one, v_min/(v_min−B)) — plus each series' own LF. It echoes how many values it received per series and warns when series lengths differ. `--mark line\|point` (position encodings) answers "not applicable" and prints no number |
 | `lf --bound [--baseline B --axis-max T \| --encoding radius]` | When values are unreadable: LF ≥ T/(T−B) for bars from a non-zero baseline (for bars LF = v/(v−B), v the smaller value); LF ≥ 2 when linear size ∝ value; otherwise "cannot be computed" |
 | `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels |
 | `scaling --values … --sizes …` | Fits the rule that maps values to measured sizes (radius ∝ value vs area ∝ value), robust to anti-aliasing on small shapes, and gives the LF for smallest→largest |
@@ -49,7 +49,7 @@ script before rendering.
 Several commands run in one process with `--then`
 (`image chart.png --then lf --data 410 520 --baseline 400`).
 
-Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (48 tests) — every check has a
+Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (56 tests) — every check has a
 negative control (silent on a clean chart, fires on a broken one). Lint: `ruff check .` and
 `pyright skills/tufte/scripts evals` are clean.
 
@@ -70,7 +70,7 @@ or in `.claude/settings.json`:
 }
 ```
 
-To pin a release, add `"ref": "tufte-skill--v1.1.0"` (or another release tag) next to `"repo"`. Settings alone register
+To pin a release, add `"ref": "tufte-skill--v1.2.0"` (or another release tag) next to `"repo"`. Settings alone register
 the marketplace; run `claude plugin install tufte-skill@tufte-skill` once to install the plugin.
 
 **As a plain skill**: copy `skills/tufte/` to `~/.claude/skills/tufte/`.
@@ -174,11 +174,12 @@ prompts and judge rules in `evals/` are in Russian, as the runs were.
 [`claude plugin eval`](https://code.claude.com/docs/en/plugin-evals) suite: one case per chart with
 the same audit prompt, a scaffold that copies the chart into the workspace, an LLM grader for the
 planted defects, a regex grader for the reference Lie Factor where there is one, a control grader
-on the two clean charts, and `skill-fired` / `tool-ran` as plugin-fired indicators. Run it from the
-repository root with a `python3` that has numpy and matplotlib first on `PATH` (the eval runs with
-a temporary `HOME`, so version managers may fall back to a bare Python):
+on the two clean charts, an "one LF" grader on F10 and F11, and `skill-fired` / `tool-ran` as
+plugin-fired indicators. The eval's sandbox cannot read a Python installed under your home directory
+(pyenv, uv, conda), so put one inside the plugin directory and first on `PATH`:
 ```
-claude plugin eval . --scaffold --allow-tools Write 'Bash(python3:*)' --judge-model sonnet
+/usr/bin/python3 -m venv .venv-eval && .venv-eval/bin/pip install numpy matplotlib
+PATH="$PWD/.venv-eval/bin:$PATH" claude plugin eval . --scaffold --allow-tools Write 'Bash(python3:*)' --judge-model sonnet
 ```
 It reports a coarse pass/fail per grader with a no-plugin baseline arm. The per-defect numbers in
 this README (each planted defect caught / partial / missed, false statements counted one by one,
@@ -322,9 +323,70 @@ the held-out failure of 1.0; they show the headline rule working, not that the f
 Regression on F1–F6 (Sonnet, 1 run each): LF 41 and 9.0 correct, "cannot be computed" on F5, the
 labelled truncation on F6 kept as a disclosed choice, the axis-colour contradiction on F3 flagged.
 
-**Held-out acceptance of 1.1:** pending at the time of this commit; results will be added here.
+**Held-out acceptance of 1.1: not passed.** The chart-wide LF was right in 80% of Sonnet runs and
+93% of Opus runs, and on multi-series charts the share of correct LFs rose from 5/15 (1.0) to 12/15.
+Auto-loading 60/60, cost ×1.13–1.20 of no skill. Three failure classes, reported without fixture
+details: (1) for radius- or area-scaled shapes Sonnet stated two LFs — one from `scaling`, one from
+`lf --measured` with sizes read by eye — and led with the wrong one, where 1.0 had stated one correct
+number; (2) the new chart-wide rule spilled over to lines and dots on a labelled truncated axis, where
+an LF does not apply and 1.0 had answered correctly; (3) a series minimum in the middle of a series
+was missed because not every value was passed to `lfmax`. 1.2 addresses these.
+
+## Version 1.2
+
+**What changed.**
+- **One LF per encoding.** `blobs` now points to `scaling` with all shapes; `scaling` says its LF is
+  the one number for those shapes; in a call that chains `scaling` with `lf` for a size encoding, the
+  `lf` result is printed as a cross-check without a "Quote this result" line. The audit procedure
+  names the precedence (`scaling` over `lf --measured` over an assumed `--encoding radius`) and forbids
+  sizes estimated by eye.
+- **No LF for position encodings.** `lfmax` requires `--mark`; `--mark line|point|dot|scatter|slope`
+  (also accepted by `lf`) returns "LF not applicable (position encoding)" and no number. `figure` and
+  `spec` compute the chart-wide LF for bars only, as before (now covered by a test with lines).
+- **Every value.** `lfmax` echoes how many values it received per series and warns when series
+  lengths differ; the procedure asks for every value of every series in drawing order.
+
+**Tests.** 56, eight of them new for 1.2. Run against the 1.1 script, five of the new tests fail (one
+LF per size encoding in both chain orders, the position-mark guard in the API and the CLI, the
+series-length warning); the other three pin behaviour 1.1 already had (a series minimum in the middle
+found when all values are passed, no LF from `figure` for lines, a bar LF kept next to `scaling`).
+
+**Development check** (`evals/dev4/`: F10 circles with radius ∝ value, reference LF 9.0, smallest
+circle 13 px; F11 two lines on an axis starting at 60 with the start stated, reference "not
+applicable"; F12 grouped bars from 60 with a series minimum in the middle, reference chart LF 18.1;
+defects written before rendering):
+
+| Headline LF correct (one number within ±10%, or none where none applies) | F10 | F11 | F12 |
+|---|---|---|---|
+| 1.2, Sonnet / Opus (2 runs each) | 2/2 / 2/2 | 2/2 / 2/2 | 2/2 / 2/2 |
+| 1.1, Sonnet / Opus | 2/2 / — | 2/2 / 1/1 | 2/2 / 1/1 |
+| 1.0, Sonnet | 2/2 | 2/2 | 0/2 (a range "5–18×" or a list as the headline) |
+| no skill, Sonnet (1 run) | no LF | no LF (correct) | no LF |
+
+These charts **did not reproduce** the held-out failures of 1.1: 1.1 itself was right on all three.
+The 1.2 changes are guards proven by the unit tests above, not by these runs; whether they fix the
+held-out classes is for the held-out acceptance of 1.2.
+
+**`claude plugin eval` on 1.2** (with-skill arm only, 1 run per case, Sonnet): the first pass ran the
+skill's script with a Python under the home directory, which the eval sandbox blocks — the agent
+reported "the script did not run" and stated no LF, so the six LF graders failed for an environmental
+reason, not a skill one. With a virtualenv inside the plugin directory (instructions above), F10
+passed all five graders (one LF of 9.00). The remaining cases were not re-run within the development
+budget. Pass/fail of the first pass: defects 9/9, F11 "no LF on lines" passed, F9 control passed, F6
+control failed (the audit called the disclosed truncation its "main problem").
+
+**Held-out acceptance of 1.2:** pending at the time of this commit.
 
 ## Changelog
+
+**1.2.0**
+- One Lie Factor per encoding: `scaling` is the number to quote for shapes; `lf` chained with
+  `scaling` prints a cross-check; sizes only from `blobs`.
+- `lfmax --mark` (required) and `lf --mark`: lines, points, dots, scatter and slope charts get "LF not
+  applicable (position encoding)".
+- `lfmax` echoes values per series and warns when series lengths differ; the procedure asks for every
+  value of every series.
+- `evals/dev4/` and plugin-eval cases F10–F12.
 
 **1.1.0**
 - `lfmax`: chart-wide Lie Factor over all marks of several series, with per-series detail.

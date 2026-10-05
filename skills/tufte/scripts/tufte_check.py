@@ -4,7 +4,8 @@
 Subcommands
   lf      Lie Factor from numbers you read off a chart (or know from the data); `--bound` when the
           values cannot be read.
-  lfmax   Chart-wide Lie Factor for several series on one axis: the strongest distortion over all marks.
+  lfmax   Chart-wide Lie Factor for several series on one axis: the strongest distortion over all marks
+          (bars, lollipops, areas from a baseline; for lines and points it reports "not applicable").
   time    Are time labels evenly spaced in time when they are drawn evenly spaced?
   image   What a PNG/JPG alone can tell (aspect, axis-label colours, colour sets per half).
   blobs   Measure coloured shapes in a PNG/JPG (circles, icons): size in pixels.
@@ -101,7 +102,8 @@ def _lf_result(lf: float, msg: str, data: dict) -> list[Finding]:
 
 def lf_findings(v1: float, v2: float, baseline: float | None = None,
                 shown: tuple[float, float] | None = None, encoding: str = "length",
-                measured: tuple[float, float] | None = None, measure: str = "length") -> list[Finding]:
+                measured: tuple[float, float] | None = None, measure: str = "length",
+                cross_check: bool = False) -> list[Finding]:
     """Lie Factor = size of effect shown / size of effect in data (VDQI p. 57).
 
     The shown magnitudes come from (in order of precedence): `shown` (already the drawn magnitude),
@@ -139,6 +141,11 @@ def lf_findings(v1: float, v2: float, baseline: float | None = None,
            f"Lie Factor = {se:.4g}/{de:.4g} = {lf:.2f}")
     if how:
         msg += " (" + "; ".join(how) + ")"
+    if cross_check:
+        return [Finding("INFO", "lie-factor-cross-check", msg + ". Cross-check only — NOT a second Lie Factor: "
+                        "`scaling` in this call fits every shape measured in pixels, so its LF is the one number to "
+                        "quote for this encoding.", data={"data_effect": de, "shown_effect": se,
+                                                          "lie_factor": round(lf, 3), "headline": False})]
     return _lf_result(lf, msg, {"data_effect": de, "shown_effect": se})
 
 
@@ -174,6 +181,8 @@ def scaling_findings(values: list[float], sizes: list[float], measure: str = "di
     msg = (f"fit over {len(values)} shapes: {measure} ∝ value^{k:.2f}, so the drawn magnitude ∝ value^{expo:.2f} → "
            f"{rule}. Smallest→largest: data {v1:g}→{v2:g} = {de:+.1%}; shown {se:+.1%}; "
            f"Lie Factor = {se:.4g}/{de:.4g} = {lf:.2f}")
+    msg += (". This is the one Lie Factor for these shapes: do not state a second one from two sizes read "
+            "separately")
     return _lf_result(lf, msg, {"exponent": round(expo, 3), "snapped_power": power})
 
 
@@ -217,6 +226,21 @@ def lf_bound_findings(baseline: float | None = None, axis_max: float | None = No
                     "Report: 'Lie Factor cannot be computed: the values are not readable'. Do not estimate the values.")]
 
 
+# Marks whose length or area from a baseline encodes the value: a Lie Factor applies. Lines and points
+# encode by position, so a truncated value axis moves them but does not inflate any drawn magnitude.
+LENGTH_MARKS = ("bar", "column", "lollipop", "area")
+POSITION_MARKS = ("line", "point", "dot", "scatter", "slope")
+NOT_APPLICABLE = ("Lie Factor not applicable (position encoding): {mark}s encode values by position, not by length "
+                  "or area from a baseline, so a truncated value axis does not inflate a drawn magnitude. "
+                  "Report: 'LF not applicable (position encoding)'. If the axis start is labelled, it is a disclosed "
+                  "choice, not a defect.")
+
+
+def position_mark_findings(mark: str) -> list[Finding]:
+    return [Finding("INFO", "lie-factor-not-applicable", NOT_APPLICABLE.format(mark=mark),
+                    data={"mark": mark, "lie_factor": None})]
+
+
 def _strongest_pair(points: list[tuple[str, float]], baseline: float, power: int):
     """Over all ordered pairs of drawn marks, the pair whose Lie Factor is farthest from 1 (in log terms).
     Returns (lf, (label1, v1), (label2, v2)) or None when no pair has a defined LF."""
@@ -238,13 +262,15 @@ def _strongest_pair(points: list[tuple[str, float]], baseline: float, power: int
 
 
 def lfmax_findings(series: dict[str, list[float]], baseline: float | None = None,
-                   encoding: str = "length") -> list[Finding]:
+                   encoding: str = "length", mark: str = "bar") -> list[Finding]:
     """Strongest distortion on a chart with several series on one value axis.
 
     A reader compares any two marks, across series as well as within one, so the chart's Lie Factor is
     the most extreme one over all pairs of marks. For bars from a baseline B > 0 that is the smallest bar
     against any larger one: LF = v_min/(v_min − B). Per-series values follow as supporting detail.
     """
+    if mark in POSITION_MARKS:
+        return position_mark_findings(mark)
     if not series or sum(len(v) for v in series.values()) < 2:
         raise ValueError("lfmax needs at least two values in total (--series NAME=v1,v2,...)")
     power = ENCODING_POWER[encoding]
@@ -266,14 +292,20 @@ def lfmax_findings(series: dict[str, list[float]], baseline: float | None = None
         how.append("linear size ∝ value, so area ∝ value²: the widest value ratio distorts most")
     if power == 3:
         how.append("volume ∝ value³: the widest value ratio distorts most")
-    msg = (f"chart-wide strongest distortion over {len(points)} marks in {len(series)} series: {pair}, "
-           f"Lie Factor = {lf:.2f}")
+    counts = ", ".join(f"{n} {len(v)}" for n, v in series.items())
+    msg = (f"chart-wide strongest distortion over {len(points)} marks in {len(series)} series "
+           f"(values received: {counts}): {pair}, Lie Factor = {lf:.2f}")
     if how:
         msg += " (" + "; ".join(how) + ")"
     head = _lf_result(lf, msg, {"pair": [[n1, v1], [n2, v2]], "series": len(series)})[0]
     head.check = "lie-factor-max"
     head.message = head.message.replace("Quote this result as: LF =", "Quote this result as: chart LF =")
     out = [head]
+    sizes = {len(v) for v in series.values()}
+    if len(series) > 1 and len(sizes) > 1:
+        out.append(Finding("WARN", "lie-factor-input", f"series have different numbers of values ({counts}). Pass "
+                           "every bar of every series, in drawing order: a minimum in the middle of a series sets the "
+                           "chart LF, and leaving it out understates the distortion."))
     if len(series) > 1:
         for name, vals in series.items():
             one = _strongest_pair([(name, v) for v in vals], b, power)
@@ -532,9 +564,10 @@ def blob_findings(path: str, min_px: int = 30, colour: str | None = None, tol: f
              f"area {b['area_px']}px equiv. diameter {b['equiv_diameter']:g}px" for i, b in enumerate(blobs[:40])]
     more = f" (+{len(blobs) - 40} more)" if len(blobs) > 40 else ""
     return [Finding("INFO", "blobs", f"{len(blobs)} region(s){more}, left to right:\n  " + "\n  ".join(lines) +
-                    "\nFor circles use the box width (diameter); pass two of them with the values they encode: "
-                    "lf --data V1 V2 --measured D1 D2 --measure diameter. Overlapping or clipped shapes "
-                    "merge or shrink: check the box against the picture.", data={"blobs": blobs})]
+                    "\nFor circles use the box width (diameter). Pass ALL shapes of the panel with the values they "
+                    "encode, in the same order, to `scaling --values V1 V2 … --sizes D1 D2 …`: its LF is the one "
+                    "number to quote. Overlapping or clipped shapes merge or shrink: check the box against the "
+                    "picture.", data={"blobs": blobs})]
 
 
 # ----------------------------------------------------------------------------- matplotlib mode
@@ -1388,7 +1421,7 @@ def parse_series(items: list[str]) -> dict[str, list[float]]:
     return out
 
 
-def main(argv=None) -> int:
+def main(argv=None, cross_check: bool = False) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--json", action="store_true", help="print findings as JSON")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1411,12 +1444,18 @@ def main(argv=None) -> int:
     q.add_argument("--axis-max", type=float, help="with --bound --baseline: the top of the value axis")
     q.add_argument("--ratio", nargs=2, type=float, metavar=("RMIN", "RMAX"),
                    help="with --bound --encoding: plausible range of the data ratio larger/smaller")
+    q.add_argument("--mark", choices=LENGTH_MARKS + POSITION_MARKS + ("shape",),
+                   help="what is drawn: bar|column|lollipop|area (length from a baseline), shape (circle, icon, "
+                        "bubble), or line|point|dot|scatter|slope (position: the LF does not apply)")
 
     q = sub.add_parser("lfmax", help="chart-wide Lie Factor: strongest distortion over all marks of several series")
     q.add_argument("--series", action="append", required=True, metavar="NAME=V1,V2,...",
                    help="one series per flag: its name and every value drawn from the shared axis")
     q.add_argument("--baseline", type=float, help="value where the bars start (truncated axis)")
     q.add_argument("--encoding", choices=sorted(ENCODING_POWER), default="length")
+    q.add_argument("--mark", required=True, choices=LENGTH_MARKS + POSITION_MARKS,
+                   help="what is drawn. bar|column|lollipop|area: length from a baseline, LF applies. "
+                        "line|point|dot|scatter|slope: position encoding, LF does not apply")
 
     q = sub.add_parser("scaling", help="which rule maps values to shape sizes? LF for smallest→largest")
     q.add_argument("--values", nargs="+", type=float, required=True)
@@ -1441,16 +1480,20 @@ def main(argv=None) -> int:
 
     a = p.parse_args(argv)
     try:
-        if a.cmd == "lf":
+        if a.cmd == "lf" and a.mark in POSITION_MARKS:
+            fs = position_mark_findings(a.mark)
+        elif a.cmd == "lf":
             if a.bound:
                 fs = lf_bound_findings(a.baseline, a.axis_max, a.encoding, tuple(a.ratio) if a.ratio else None)
             elif a.data is None:
                 p.error("lf needs --data FIRST SECOND (or --bound when the values cannot be read)")
             else:
+                size_encoding = a.measured is not None or ENCODING_POWER[a.encoding] > 1 or a.mark == "shape"
                 fs = lf_findings(a.data[0], a.data[1], a.baseline, tuple(a.shown) if a.shown else None, a.encoding,
-                                 tuple(a.measured) if a.measured else None, a.measure)
+                                 tuple(a.measured) if a.measured else None, a.measure,
+                                 cross_check=cross_check and size_encoding)
         elif a.cmd == "lfmax":
-            fs = lfmax_findings(parse_series(a.series), a.baseline, a.encoding)
+            fs = lfmax_findings(parse_series(a.series), a.baseline, a.encoding, a.mark)
         elif a.cmd == "scaling":
             fs = scaling_findings(a.values, a.sizes, a.measure)
         elif a.cmd == "time":
@@ -1486,12 +1529,15 @@ def main_chain(argv=None) -> int:
         else:
             cur.append(a)
     parts.append(cur)
+    # One Lie Factor per encoding: when `scaling` runs in the same call, an `lf` for a size encoding
+    # (measured sizes or an assumed radius rule) is printed as a cross-check, not as a second LF to quote.
+    has_scaling = any(part[:1] == ["scaling"] for part in parts)
     code = 0
     for part in parts:
         if not part:
             continue
         print(f"## {' '.join(part)}")
-        code = max(code, main(glob + part))
+        code = max(code, main(glob + part, cross_check=has_scaling and part[:1] == ["lf"]))
     return code
 
 

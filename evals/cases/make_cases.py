@@ -9,7 +9,7 @@ with open(os.path.join(ROOT, "evals/dev/audit_prompt.txt"), encoding="utf-8") as
     PROMPT = _f.read().strip()
 
 SET = {"F1": "dev", "F2": "dev", "F3": "dev", "F4": "dev2", "F5": "dev2", "F6": "dev2",
-       "F7": "dev3", "F8": "dev3", "F9": "dev3"}
+       "F7": "dev3", "F8": "dev3", "F9": "dev3", "F10": "dev4", "F11": "dev4", "F12": "dev4"}
 
 DEFECTS = {
     "F1": (8, ["value axis of the bars starts at 400 (truncated, no break mark)",
@@ -36,6 +36,9 @@ DEFECTS = {
                "no units or no source", "meaningless per-bar colours"]),
     "F7": (5, ["value axis starts at 2.0 under bars (truncated)", "headline «Реклама догнала партнёров» contradicted by Q4 (2.7 < 3.0)",
                "no unit (%)", "no source", "dark grid drawn over the bars", "boxed legend instead of direct labels"]),
+    "F10": (1, ["circle radius ∝ value, so area grows with value²", "no key for how size maps to value",
+                "circles in unrelated colours that carry no data"]),
+    "F12": (1, ["value axis starts at 60 under bars (truncated)", "no source"]),
     "F8": (3, ["value axis starts at 50 under bars (truncated)", "three decimals on thousands of orders («62.000»)",
                "legend order is the reverse of the bar order", "no source"]),
 }
@@ -46,7 +49,19 @@ LF_REGEX = {
     "F4": r"(?:LF|[Ll]ie [Ff]actor)[^\n]{0,40}?(?:8[.,][1-9]|9(?:[.,]\d+)?|9[.,]9)\b",
     "F7": r"(?:LF|[Ll]ie [Ff]actor)[^\n]{0,40}?(?:8[.,][1-9]\d*|9(?:[.,]\d+)?)\b",
     "F8": r"(?:LF|[Ll]ie [Ff]actor)[^\n]{0,40}?(?:1[23][.,]\d+|13|14(?:[.,][0-8]\d*)?)\b",
+    "F10": r"(?:LF|[Ll]ie [Ff]actor)[^\n]{0,40}?(?:8[.,][1-9]\d*|9(?:[.,]\d+)?)\b",
+    "F12": r"(?:LF|[Ll]ie [Ff]actor)[^\n]{0,40}?(?:1[67][.,]\d+|1[89](?:[.,]\d+)?)\b",
     "F5": r"(?:не (?:может быть )?вычисл|нельзя (?:вы)?числ|невозможно (?:вы|по)счит|cannot be computed|not computable)",
+}
+
+ONE_LF = {
+    "F10": "The audit must state exactly ONE Lie Factor for the circles, about 9 (8.1–9.9). PASS if it does. FAIL if "
+           "it states two or more different LF numbers for the circles (for example one from fitting all circles and "
+           "another from two diameters), or its headline LF for the circles is outside 8.1–9.9.",
+    "F11": "The chart shows two LINES on a value axis that starts at 60, and the chart says so. Lines encode by "
+           "position, so the Lie Factor does not apply. PASS if the audit states no Lie Factor number and no "
+           "'exaggerated N times' for this chart (saying 'LF not applicable' is a pass). FAIL if it states any LF "
+           "number or a distortion multiple, or calls the labelled axis start a defect.",
 }
 
 CONTROL = {
@@ -107,6 +122,9 @@ for fx, s in SET.items():
         write(os.path.join(g, "lie-factor.md"),
               "---\ntype: regex\ntarget: last_message\n"
               f"pattern: '{LF_REGEX[fx]}'\n---\n")
+    if fx in ONE_LF:
+        write(os.path.join(g, "one-lie-factor.md"),
+              "---\ntype: llm\nfocus: last_message\n---\n\n" + ONE_LF[fx] + "\n")
     if fx in CONTROL:
         write(os.path.join(g, "no-false-defects.md"),
               "---\ntype: llm\nfocus: last_message\n---\n\n" + CONTROL[fx] + "\n")
