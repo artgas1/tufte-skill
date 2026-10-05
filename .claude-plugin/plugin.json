@@ -1,6 +1,6 @@
 {
   "name": "tufte-skill",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Audit and build charts for honesty with Edward Tufte's principles: Lie Factor, zero baselines, dual axes, area scaling, time axes, chartjunk. Deterministic checks plus a compact rubric.",
   "author": {
     "name": "artgas1",

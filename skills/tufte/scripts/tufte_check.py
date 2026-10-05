@@ -4,6 +4,7 @@
 Subcommands
   lf      Lie Factor from numbers you read off a chart (or know from the data); `--bound` when the
           values cannot be read.
+  lfmax   Chart-wide Lie Factor for several series on one axis: the strongest distortion over all marks.
   time    Are time labels evenly spaced in time when they are drawn evenly spaced?
   image   What a PNG/JPG alone can tell (aspect, axis-label colours, colour sets per half).
   blobs   Measure coloured shapes in a PNG/JPG (circles, icons): size in pixels.
@@ -214,6 +215,75 @@ def lf_bound_findings(baseline: float | None = None, axis_max: float | None = No
         return [Finding("ERROR", "lie-factor-bound", msg + ".", data={"lie_factor_min": p})]
     return [Finding("WARN", "lie-factor-bound", "no bound is possible without readable values or an axis range. "
                     "Report: 'Lie Factor cannot be computed: the values are not readable'. Do not estimate the values.")]
+
+
+def _strongest_pair(points: list[tuple[str, float]], baseline: float, power: int):
+    """Over all ordered pairs of drawn marks, the pair whose Lie Factor is farthest from 1 (in log terms).
+    Returns (lf, (label1, v1), (label2, v2)) or None when no pair has a defined LF."""
+    best = None
+    for i, (l1, v1) in enumerate(points):
+        for j, (l2, v2) in enumerate(points):
+            if i == j or v1 == v2 or v1 == 0:
+                continue
+            s1, s2 = (v1 - baseline) ** power, (v2 - baseline) ** power
+            if s1 == 0:
+                continue
+            lf = lie_factor((v1, v2), (s1, s2))
+            if lf <= 0:
+                continue
+            key = (round(abs(math.log(lf)), 9), v2 > v1, abs(v2 - v1))  # ties: the increase, the widest gap
+            if best is None or key > best[0]:
+                best = (key, lf, (l1, v1), (l2, v2))
+    return None if best is None else best[1:]
+
+
+def lfmax_findings(series: dict[str, list[float]], baseline: float | None = None,
+                   encoding: str = "length") -> list[Finding]:
+    """Strongest distortion on a chart with several series on one value axis.
+
+    A reader compares any two marks, across series as well as within one, so the chart's Lie Factor is
+    the most extreme one over all pairs of marks. For bars from a baseline B > 0 that is the smallest bar
+    against any larger one: LF = v_min/(v_min − B). Per-series values follow as supporting detail.
+    """
+    if not series or sum(len(v) for v in series.values()) < 2:
+        raise ValueError("lfmax needs at least two values in total (--series NAME=v1,v2,...)")
+    power = ENCODING_POWER[encoding]
+    b = 0.0 if baseline is None else baseline
+    points = [(name, v) for name, vals in series.items() for v in vals]
+    below = [f"{n}={v:g}" for n, v in points if v <= b]
+    if below:
+        raise ValueError(f"values at or below the baseline {b:g} cannot be drawn from it: {', '.join(below)}")
+    top = _strongest_pair(points, b, power)
+    if top is None:
+        raise ValueError("no pair of different values: the Lie Factor is undefined")
+    lf, (n1, v1), (n2, v2) = top
+    pair = f"{n1} {v1:g} → {n2} {v2:g}" if n1 != n2 else f"{n1} {v1:g} → {v2:g}"
+    how = []
+    if b != 0:
+        how.append(f"drawn from a baseline of {b:g}: for bars LF = v/(v−{b:g}) with v the first value, "
+                   "so the smallest bar against any larger one distorts most")
+    if power == 2:
+        how.append("linear size ∝ value, so area ∝ value²: the widest value ratio distorts most")
+    if power == 3:
+        how.append("volume ∝ value³: the widest value ratio distorts most")
+    msg = (f"chart-wide strongest distortion over {len(points)} marks in {len(series)} series: {pair}, "
+           f"Lie Factor = {lf:.2f}")
+    if how:
+        msg += " (" + "; ".join(how) + ")"
+    head = _lf_result(lf, msg, {"pair": [[n1, v1], [n2, v2]], "series": len(series)})[0]
+    head.check = "lie-factor-max"
+    head.message = head.message.replace("Quote this result as: LF =", "Quote this result as: chart LF =")
+    out = [head]
+    if len(series) > 1:
+        for name, vals in series.items():
+            one = _strongest_pair([(name, v) for v in vals], b, power)
+            if one is None:
+                continue
+            slf, (_, a1), (_, a2) = one
+            out.append(Finding("INFO", "lie-factor-series", f"within {name}: {a1:g} → {a2:g}, LF = {slf:.2f} "
+                               "(supporting detail; the chart LF above is the headline number)",
+                               data={"series": name, "lie_factor": round(slf, 3)}))
+    return out
 
 
 # ----------------------------------------------------------------------------- time spacing
@@ -571,7 +641,8 @@ def _figure_texts(fig) -> str:
 
 def _check_bars(ax, where, labelled_truncation: bool = False):
     out = []
-    for cont in _bar_containers(ax):
+    truncated: dict[float, dict[str, list[float]]] = {}  # visible baseline -> series label -> values
+    for n, cont in enumerate(_bar_containers(ax)):
         ps = [p for p in cont.patches if p.get_visible()]
         if len(ps) < 2 or not all(hasattr(p, "get_y") for p in ps):
             continue
@@ -597,6 +668,12 @@ def _check_bars(ax, where, labelled_truncation: bool = False):
         lo = min(lim)
         visible_from = max(b, lo) if all(v >= 0 for v in vals) else b
         if all(v > 0 for v in vals) and visible_from > 0:
+            if all(v > visible_from for v in vals):
+                name = _label(cont)
+                group = truncated.setdefault(visible_from, {})
+                if not name or name.startswith("_") or name in group:
+                    name = f"series {n + 1}"
+                group[name] = vals
             vmin, vmax = min(vals), max(vals)
             if vmin == vmax:
                 continue
@@ -611,6 +688,18 @@ def _check_bars(ax, where, labelled_truncation: bool = False):
                                f"bars start at {visible_from:g}, not at zero. Smallest→largest bar: "
                                + f.message.split(". The graphic")[0] + ". Start the value axis at zero, or show dots "
                                "instead of bars and label the truncation.", where, f.data))
+    for base, series in truncated.items():
+        if len(series) < 2:
+            continue
+        head = lfmax_findings(series, baseline=base)[0]
+        if labelled_truncation:
+            head = Finding("INFO", "lie-factor-max", "labelled truncation; for reference, "
+                           + head.message.split(". The graphic")[0] + ".", where, head.data)
+        else:
+            head.where = where
+            head.message = ("several series share this truncated axis, so readers compare bars across series; "
+                            "the per-series LFs above understate it. " + head.message)
+        out.append(head)
     return out
 
 
@@ -1166,6 +1255,7 @@ def plotly_findings(fig: dict) -> list[Finding]:
         ref = t.get(f"{ch}axis", ch)
         return ch + "axis" + ref[1:]
 
+    truncated: dict[tuple[str, float], dict[str, list[float]]] = {}
     for i, t in enumerate(traces):
         typ = t.get("type", "scatter")
         where = f"trace {i} ({t.get('name') or typ})"
@@ -1175,6 +1265,12 @@ def plotly_findings(fig: dict) -> list[Finding]:
             rng = ax.get("range")
             if isinstance(rng, list) and len(rng) == 2 and min(rng) > 0:
                 out.append(Finding("ERROR", "bar-baseline", f"bars on an axis whose range starts at {min(rng):g}.", where))
+                vals = t.get(ch)
+                if (ax.get("type") != "log" and isinstance(vals, list) and vals
+                        and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in vals)):
+                    group = truncated.setdefault((axis_key(t, ch), float(min(rng))), {})
+                    name = t.get("name") if isinstance(t.get("name"), str) and t.get("name") else f"trace {i}"
+                    group[name if name not in group else f"{name} ({i})"] = [float(v) for v in vals]
             if ax.get("type") == "log":
                 out.append(Finding("ERROR", "bar-baseline", "bars on a log axis.", where))
         if typ in ("scatter3d", "surface", "mesh3d", "cone", "volume", "isosurface"):
@@ -1248,6 +1344,14 @@ def plotly_findings(fig: dict) -> list[Finding]:
             if own and not any(rgb_dist(ac, c) < 0.2 for c in own) and any(rgb_dist(ac, c) < 0.2 for c in others):
                 out.append(Finding("ERROR", "axis-colour-swap", f"{key} is coloured like the series on the other "
                                    "axis.", "layout"))
+    # Lie Factor of bars on a truncated axis, chart-wide (across every bar trace on that axis)
+    for (key, base), series in truncated.items():
+        vals = [v for vs in series.values() for v in vs]
+        if len(vals) < 2 or min(vals) <= base or min(vals) == max(vals):
+            continue
+        head = lfmax_findings(series, baseline=base)[0]
+        head.where = key
+        out.append(head)
     return out
 
 
@@ -1263,6 +1367,25 @@ def spec_findings(path: str) -> list[Finding]:
 
 
 # ----------------------------------------------------------------------------- CLI
+
+
+def parse_series(items: list[str]) -> dict[str, list[float]]:
+    """`NAME=1,2,3` (one per --series flag) -> {NAME: [1.0, 2.0, 3.0]}; names must be unique."""
+    out: dict[str, list[float]] = {}
+    for item in items:
+        name, sep, raw = item.rpartition("=")
+        if not sep or not name.strip():
+            raise ValueError(f"--series expects NAME=V1,V2,...; got {item!r}")
+        try:
+            vals = [float(x) for x in raw.replace(";", ",").split(",") if x.strip()]
+        except ValueError:
+            raise ValueError(f"--series {name.strip()!r}: values must be numbers, got {raw!r}") from None
+        if not vals:
+            raise ValueError(f"--series {name.strip()!r} has no values")
+        if name.strip() in out:
+            raise ValueError(f"--series name {name.strip()!r} is repeated")
+        out[name.strip()] = vals
+    return out
 
 
 def main(argv=None) -> int:
@@ -1288,6 +1411,12 @@ def main(argv=None) -> int:
     q.add_argument("--axis-max", type=float, help="with --bound --baseline: the top of the value axis")
     q.add_argument("--ratio", nargs=2, type=float, metavar=("RMIN", "RMAX"),
                    help="with --bound --encoding: plausible range of the data ratio larger/smaller")
+
+    q = sub.add_parser("lfmax", help="chart-wide Lie Factor: strongest distortion over all marks of several series")
+    q.add_argument("--series", action="append", required=True, metavar="NAME=V1,V2,...",
+                   help="one series per flag: its name and every value drawn from the shared axis")
+    q.add_argument("--baseline", type=float, help="value where the bars start (truncated axis)")
+    q.add_argument("--encoding", choices=sorted(ENCODING_POWER), default="length")
 
     q = sub.add_parser("scaling", help="which rule maps values to shape sizes? LF for smallest→largest")
     q.add_argument("--values", nargs="+", type=float, required=True)
@@ -1320,6 +1449,8 @@ def main(argv=None) -> int:
             else:
                 fs = lf_findings(a.data[0], a.data[1], a.baseline, tuple(a.shown) if a.shown else None, a.encoding,
                                  tuple(a.measured) if a.measured else None, a.measure)
+        elif a.cmd == "lfmax":
+            fs = lfmax_findings(parse_series(a.series), a.baseline, a.encoding)
         elif a.cmd == "scaling":
             fs = scaling_findings(a.values, a.sizes, a.measure)
         elif a.cmd == "time":

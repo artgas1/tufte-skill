@@ -35,20 +35,21 @@ script before rendering.
 | Command | What it checks |
 |---|---|
 | `lf --data A B [--baseline X \| --encoding radius \| --measured D1 D2 --measure diameter]` | Lie Factor (VDQI p. 57) for truncated axes and size encodings; prints a "Quote this result as" line |
+| `lfmax --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart-wide LF — the strongest distortion over every pair of marks, across series too (for bars from a baseline B: the smallest bar against any larger one, v_min/(v_min−B)) — plus each series' own LF |
 | `lf --bound [--baseline B --axis-max T \| --encoding radius]` | When values are unreadable: LF ≥ T/(T−B) for bars from a non-zero baseline (for bars LF = v/(v−B), v the smaller value); LF ≥ 2 when linear size ∝ value; otherwise "cannot be computed" |
 | `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels |
 | `scaling --values … --sizes …` | Fits the rule that maps values to measured sizes (radius ∝ value vs area ∝ value), robust to anti-aliasing on small shapes, and gives the LF for smallest→largest |
 | `time LABEL...` | Time labels drawn evenly but uneven in time; missing periods |
 | `image chart.png` | What pixels can tell: aspect ratio, colour-coded axes, colour sets of repeated panels. Says plainly that integrity cannot be computed from pixels |
-| `figure plot.py` | Runs a matplotlib script (show/close disabled) and checks bar baselines (with Lie Factor; downgraded to a note when the chart's text labels the truncation), dual-axis colour swaps, one category in two colours, time spacing, pies (count, explode, labels summing to 100), dark or on-top grid, 3-D, smoothing, fills to arbitrary levels, icons scaled in both dimensions, shouting or causal titles, false precision, aspect and banking |
-| `spec chart.json` | The same checks for Vega-Lite specs and Plotly figure JSON where the spec allows (incl. Plotly's default `sizemode='diameter'`) |
+| `figure plot.py` | Runs a matplotlib script (show/close disabled) and checks bar baselines (with Lie Factor per series and chart-wide; downgraded to a note when the chart's text labels the truncation), dual-axis colour swaps, one category in two colours, time spacing, pies (count, explode, labels summing to 100), dark or on-top grid, 3-D, smoothing, fills to arbitrary levels, icons scaled in both dimensions, shouting or causal titles, false precision, aspect and banking |
+| `spec chart.json` | The same checks for Vega-Lite specs and Plotly figure JSON where the spec allows (incl. Plotly's default `sizemode='diameter'`, and the chart-wide LF for Plotly bars on a truncated axis; Vega-Lite bars get the baseline check without an LF) |
 
 `figure` **executes** the script you give it. Run it on plotting code you trust.
 
 Several commands run in one process with `--then`
 (`image chart.png --then lf --data 410 520 --baseline 400`).
 
-Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (41 tests) — every check has a
+Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (48 tests) — every check has a
 negative control (silent on a clean chart, fires on a broken one). Lint: `ruff check .` and
 `pyright skills/tufte/scripts evals` are clean.
 
@@ -69,7 +70,7 @@ or in `.claude/settings.json`:
 }
 ```
 
-To pin a release, add `"ref": "tufte-skill--v1.0.0"` next to `"repo"`. Settings alone register
+To pin a release, add `"ref": "tufte-skill--v1.1.0"` (or another release tag) next to `"repo"`. Settings alone register
 the marketplace; run `claude plugin install tufte-skill@tufte-skill` once to install the plugin.
 
 **As a plain skill**: copy `skills/tufte/` to `~/.claude/skills/tufte/`.
@@ -168,6 +169,29 @@ Per-run data: [`evals/dev-results/runs.csv`](evals/dev-results/runs.csv). Fixtur
 the harness are in `evals/`.
 Regenerating the fixtures (`evals/*/fixtures/make_fixtures.py`) additionally needs SciPy; the
 prompts and judge rules in `evals/` are in Russian, as the runs were.
+
+**`claude plugin eval` suite.** `evals/cases/` holds development charts F1–F9 as a
+[`claude plugin eval`](https://code.claude.com/docs/en/plugin-evals) suite: one case per chart with
+the same audit prompt, a scaffold that copies the chart into the workspace, an LLM grader for the
+planted defects, a regex grader for the reference Lie Factor where there is one, a control grader
+on the two clean charts, and `skill-fired` / `tool-ran` as plugin-fired indicators. Run it from the
+repository root with a `python3` that has numpy and matplotlib first on `PATH` (the eval runs with
+a temporary `HOME`, so version managers may fall back to a bare Python):
+```
+claude plugin eval . --scaffold --allow-tools Write 'Bash(python3:*)' --judge-model sonnet
+```
+It reports a coarse pass/fail per grader with a no-plugin baseline arm. The per-defect numbers in
+this README (each planted defect caught / partial / missed, false statements counted one by one,
+blind cross-judging) come from the harness in `evals/harness/`, and acceptance uses held-out
+charts; `plugin eval` replaces neither. `python3 evals/cases/make_cases.py` regenerates the cases.
+
+First pass (1 run per arm, Sonnet agent, Sonnet judge): with the skill all 9 cases scored 1.0; without
+it the mean was 0.61 — the Lie Factor grader failed without the skill on all five charts that have a
+reference LF, the defect graders passed in both arms, and the F6 control (a disclosed truncation)
+failed without the skill. The two control rubrics were retargeted after a first attempt in which both
+arms failed: the F9 chart carries a real, unplanned inconsistency (an export dated 01.10.2025 showing
+Q4), and the rubric counted minor remarks as false findings. One run per arm is a smoke test, not a
+measurement.
 <!-- DEV-RESULTS-END -->
 
 **Held-out set — version 0.1.0 did not pass.** The acceptance run, on charts the author has not
@@ -257,8 +281,9 @@ masked. Opus re-judged the Lie Factor charts as a cross-check: 264/264 defect ve
 bootstrap estimates over chart × run with 95% CIs.
 
 **Known limitations.**
-- Truncated axis with several series: the LF is computed per series, not for the most extreme
-  pair across series. Planned for 1.1.
+- Truncated axis with several series (1.0): the LF was computed per series, not for the most
+  extreme pair across series. Addressed in 1.1 by `lfmax` and the headline rule (see
+  [Version 1.1](#version-11)); held-out acceptance of 1.1 is reported there.
 - Some labelled, deliberate choices still draw comments ("illustrative data" called unfit for
   decisions, a labelled log scale called misleading): 1–2 false statements per clean chart.
 - Values misread from images (segment sizes, gauge thresholds) still produce wrong statements;
@@ -271,6 +296,43 @@ bootstrap estimates over chart × run with 95% CIs.
 8 agent runs (Sonnet) on three development inputs — a matplotlib script, a Vega-Lite spec and a
 Plotly figure: the skill loaded and called the right command in 8/8 runs and every planted defect
 was found. These inputs are not part of a held-out set.
+
+## Version 1.1
+
+**What changed.** A reader of a grouped or multi-series bar chart compares bars across series, so
+the distortion that matters is the most extreme pair on the whole chart. For bars from a baseline
+B that is the smallest bar against any larger one, LF = v_min/(v_min − B). 1.1 adds `lfmax`, which
+computes it over every pair of marks (and per series as detail), makes `figure` and Plotly `spec`
+print it as `lie-factor-max`, and tells the audit to lead with this chart LF. All 1.0 rules stay:
+every LF from the tool, "cannot be computed" for unreadable values, disclosed choices are not
+defects.
+
+**Development check** (`evals/dev3/`: F7 three channels on an axis cut at 2.0, chart LF 9.0; F8 two
+years on an axis cut at 50, chart LF 13.5; F9 a clean control; defects written before rendering;
+2 runs per cell):
+
+| | Headline LF = chart maximum |
+|---|---|
+| 1.1 | 6/6 (Sonnet 4/4, Opus 2/2), each from `lfmax` |
+| 1.0 | 2/6 — the maximum was among the LFs it listed in 6/6, but 4 audits led with a list or a range |
+| no skill | no LF number in 4/4 |
+
+On these two charts 1.0's own pairs happened to include the smallest bar, so they do not reproduce
+the held-out failure of 1.0; they show the headline rule working, not that the failure is fixed.
+Regression on F1–F6 (Sonnet, 1 run each): LF 41 and 9.0 correct, "cannot be computed" on F5, the
+labelled truncation on F6 kept as a disclosed choice, the axis-colour contradiction on F3 flagged.
+
+**Held-out acceptance of 1.1:** pending at the time of this commit; results will be added here.
+
+## Changelog
+
+**1.1.0**
+- `lfmax`: chart-wide Lie Factor over all marks of several series, with per-series detail.
+- `figure` and Plotly `spec`: `lie-factor-max` for bars of several series on a truncated axis.
+- Audit procedure: with several series on one truncated axis, the headline LF is the chart LF.
+- `evals/cases/`: the development charts as a `claude plugin eval` suite; development set 3.
+
+**1.0.0** — first release.
 
 ## Relationship to jpoindexter/tufte-skills
 

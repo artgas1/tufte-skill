@@ -459,3 +459,65 @@ def test_cli_lf_requires_data_or_bound():
     b = subprocess.run([sys.executable, SCRIPT, "lf", "--bound", "--baseline", "400", "--axis-max", "530"],
                        capture_output=True, text=True, check=False)
     assert b.returncode == 1 and "LF ≥ 4.08" in b.stdout
+
+
+# ------------------------------------------------------------------ chart-wide Lie Factor (v1.1)
+
+
+def test_lfmax_takes_the_extreme_pair_across_series():
+    # per series: Email 3.9->4.2 from 2 gives 2.05, Partners 2.5->3.0 gives 5.00; across series the
+    # smallest bar (2.4, Ads) against any larger one gives 2.4/(2.4-2) = 6.0
+    fs = tc.lfmax_findings({"Email": [3.9, 4.2], "Partners": [2.5, 3.0], "Ads": [2.4, 2.8]}, baseline=2)
+    head = fs[0]
+    assert head.check == "lie-factor-max" and head.severity == "ERROR"
+    assert abs(head.data["lie_factor"] - 6.0) < 1e-9
+    assert head.data["pair"][0] == ["Ads", 2.4]
+    per = {f.data["series"]: f.data["lie_factor"] for f in fs if f.check == "lie-factor-series"}
+    assert abs(per["Email"] - 3.9 / 1.9) < 1e-3 and abs(per["Partners"] - 5.0) < 1e-9
+
+
+def test_lfmax_negative_control_zero_baseline():
+    fs = tc.lfmax_findings({"A": [3.9, 4.2], "B": [2.4, 3.0]}, baseline=0)
+    assert fs[0].severity == "INFO" and abs(fs[0].data["lie_factor"] - 1.0) < 1e-9
+    assert not any(f.severity == "ERROR" for f in fs)
+
+
+def test_lfmax_radius_encoding_uses_widest_ratio():
+    fs = tc.lfmax_findings({"2024": [10, 20], "2025": [5, 40]}, encoding="radius")
+    assert abs(fs[0].data["lie_factor"] - 9.0) < 1e-9  # r = 8 -> LF = r + 1
+
+
+def test_lfmax_rejects_values_below_baseline():
+    with pytest.raises(ValueError):
+        tc.lfmax_findings({"A": [1.5, 3]}, baseline=2)
+
+
+def test_figure_multi_series_truncated_bars(tmp_path):
+    body = """
+    fig, ax = plt.subplots()
+    x = np.arange(3)
+    ax.bar(x - 0.2, [3.9, 4.0, 4.2], 0.4, label='Email')
+    ax.bar(x + 0.2, [2.4, 2.9, 3.0], 0.4, label='Partners')
+    ax.set_ylim(2, 4.5)
+    """
+    fs = run_fig(tmp_path, body)
+    head = next(f for f in fs if f.check == "lie-factor-max")
+    assert head.severity == "ERROR" and abs(head.data["lie_factor"] - 6.0) < 1e-9
+    clean = run_fig(tmp_path, body.replace("ax.set_ylim(2, 4.5)", "ax.set_ylim(0, 4.5)"))
+    assert "lie-factor-max" not in checks(clean)
+
+
+def test_plotly_multi_trace_truncated_bars():
+    bad = {"data": [{"type": "bar", "name": "A", "y": [3.9, 4.2]}, {"type": "bar", "name": "B", "y": [2.4, 3.0]}],
+           "layout": {"yaxis": {"range": [2, 4.5]}}}
+    head = next(f for f in tc.plotly_findings(bad) if f.check == "lie-factor-max")
+    assert abs(head.data["lie_factor"] - 6.0) < 1e-9
+    ok = {"data": bad["data"], "layout": {}}
+    assert "lie-factor-max" not in checks(tc.plotly_findings(ok))
+
+
+def test_cli_lfmax(capsys):
+    code = tc.main(["lfmax", "--series", "Email=3.9,4.2", "--series", "Ads=2.4,2.8", "--baseline", "2"])
+    out = capsys.readouterr().out
+    assert code == 1 and "chart LF = 6.00" in out
+    assert tc.main(["lfmax", "--series", "bad"]) == 2

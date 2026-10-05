@@ -101,3 +101,19 @@ skill,1.0.0,F6,opus,r1,0,0,0,,,,,,,0.2215,True,dev2,34.33,,True
 skill,1.0.0,F6,opus,r2,0,0,0,,,,,,,0.2387,True,dev2,34.33,,True
 skill,1.0.0,F6,sonnet,r1,0,0,0,,,,,,,0.1342,True,dev2,34.33,,True
 skill,1.0.0,F6,sonnet,r2,0,0,0,,,,,,,0.1214,True,dev2,34.33,,True
+skill,1.0.0,F7,sonnet,r1,,,,,,,,,,0.1522,True,dev3,"9.00 among a list",False,True
+skill,1.0.0,F7,sonnet,r2,,,,,,,,,,0.1609,True,dev3,"9.00 among a list",False,True
+skill,1.0.0,F7,opus,r1,,,,,,,,,,0.3364,True,dev3,"до 9",True,True
+skill,1.0.0,F7,opus,r2,,,,,,,,,,0.3444,True,dev3,"до 9.00",True,True
+skill,1.0.0,F8,sonnet,r1,,,,,,,,,,0.1521,True,dev3,"3–13 (range); 13.50 in table",False,True
+skill,1.0.0,F8,sonnet,r2,,,,,,,,,,0.1505,True,dev3,"3–13 (range); 13.50 in table",False,True
+skill,1.1.0-dev,F7,sonnet,r1,,,,,,,,,,0.1920,True,dev3,9.00,True,True
+skill,1.1.0-dev,F7,sonnet,r2,,,,,,,,,,0.1694,True,dev3,9.00,True,True
+skill,1.1.0-dev,F7,opus,r1,,,,,,,,,,0.3041,True,dev3,9.00,True,True
+skill,1.1.0-dev,F7,opus,r2,,,,,,,,,,0.3288,True,dev3,9.00,True,True
+skill,1.1.0-dev,F8,sonnet,r1,,,,,,,,,,0.1411,True,dev3,13.5,True,True
+skill,1.1.0-dev,F8,sonnet,r2,,,,,,,,,,0.1465,True,dev3,13.50,True,True
+base,,F7,sonnet,r1,,,,,,,,,,0.1257,True,dev3,,,
+base,,F7,sonnet,r2,,,,,,,,,,0.1164,False,dev3,,,
+base,,F8,sonnet,r1,,,,,,,,,,0.1258,True,dev3,,,
+base,,F8,sonnet,r2,,,,,,,,,,0.1369,True,dev3,,,

@@ -38,9 +38,10 @@ python3 /abs/path/to/skill/scripts/tufte_check.py image chart.png --then lf --da
 | `image chart.png` | Image only. Aspect ratio, colour-coded axes, colour sets of the left/right halves. It cannot compute integrity from pixels. |
 | `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels: box width/height, area. |
 | `scaling --values … --sizes …` | Fits which rule maps values to measured sizes (radius ∝ value or area ∝ value) and gives the LF for smallest→largest. |
-| `figure plot.py` | Runs a matplotlib script (show/close disabled) and checks every figure: bar baselines with Lie Factor, dual-axis colours, category colours across panels, time spacing, pies, grid, 3-D, smoothing, area fills, icon scaling, titles. |
+| `figure plot.py` | Runs a matplotlib script (show/close disabled) and checks every figure: bar baselines with Lie Factor (per series and chart-wide), dual-axis colours, category colours across panels, time spacing, pies, grid, 3-D, smoothing, area fills, icon scaling, titles. |
 | `spec chart.json` | Vega-Lite spec or Plotly figure JSON: the same checks where the spec allows. |
 | `lf --data A B --baseline X` | Lie Factor from two values you read. `--encoding both-dims`/`radius` when linear size ∝ value, `volume` for 3-D; `--measured D1 D2 --measure diameter` for sizes measured in pixels. |
+| `lfmax --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart Lie Factor — the strongest distortion over every pair of marks, across series too — plus each series' own LF. |
 | `lf --bound …` | Values unreadable: `--baseline B --axis-max T` gives LF ≥ T/(T−B) for bars from B; `--encoding radius` gives LF ≥ 2, but only when you know linear size ∝ value (a legend says so) — growing width and height alone do not prove it; bare `--bound` tells you to report "cannot be computed". |
 | `time L1 L2 …` | Are labels drawn evenly also even in time? `--positions` if the spacing is not even. |
 
@@ -97,6 +98,12 @@ Three rules make the reading trustworthy:
     no LF number.
   - **Truncated bars:** `lf --data V1 V2 --baseline B`. For bars LF = v/(v − B) with v the smaller
     value, so the exact value of the larger bar barely matters.
+  - **Several series on one truncated axis:** readers compare bars across series, not only within
+    one. Run `lfmax` with every value of every series (`--series Email=3.9,4.2 --series Ads=2.4,2.8
+    --baseline 2`). The **headline LF is the chart LF it prints** (the smallest bar against any larger
+    one); per-series LFs go after it as detail. Same for bubbles or icons of several series: pass all
+    shapes of the panel to `scaling` at once. `figure`/`spec` print the chart LF themselves
+    (`lie-factor-max`).
   - **Circles, bubbles, icons:** read the printed values, measure the shapes with `blobs` (box width
     = diameter), then `scaling --values v1 v2 … --sizes d1 d2 …` (all shapes of one panel, same
     order). It fits the rule — radius ∝ value means area ∝ value² — and prints one LF; small shapes
