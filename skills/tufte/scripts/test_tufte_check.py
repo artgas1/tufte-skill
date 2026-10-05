@@ -591,3 +591,41 @@ def test_chain_keeps_bar_lf_next_to_scaling(capsys):
     tc.main_chain(["scaling", "--values", "1", "2", "4", "--sizes", "1", "2", "4", "--then",
                    "lf", "--data", "410", "520", "--baseline", "400"])
     assert len(_quoted(capsys.readouterr().out)) == 2   # different encodings: each has its own LF
+
+
+# ------------------------------------------------------------------ v1.3: contrast, more position marks
+
+
+def test_contrast_grey_on_white_passes_aa():
+    f = tc.contrast_findings("#555", "#fff")[0]
+    assert f.severity == "INFO" and abs(f.data["ratio"] - 7.46) < 0.01 and f.data["aa"] and f.data["aaa_normal"]
+    assert "Do not call this text low-contrast" in f.message
+
+
+def test_contrast_light_grey_fails():
+    f = tc.contrast_findings("#aaaaaa", "white")[0]
+    assert f.severity == "ERROR" and abs(f.data["ratio"] - 2.32) < 0.01 and not f.data["aa"]
+    assert tc.contrast_findings("#aaaaaa", "white", size="large")[0].severity == "ERROR"   # 2.32 < 3
+
+
+def test_contrast_threshold_and_formats():
+    near = tc.contrast_findings("#767676", "#ffffff")[0]           # 4.54: the lightest grey that passes AA
+    assert near.data["aa"] and not near.data["aaa_normal"]
+    assert not tc.contrast_findings("#777777", "#ffffff")[0].data["aa"]   # 4.48: just fails
+    same = tc.contrast_findings("rgb(85,85,85)", "FFFFFF")[0]
+    assert abs(same.data["ratio"] - 7.46) < 0.01
+    with pytest.raises(ValueError):
+        tc.parse_colour("not-a-colour")
+
+
+def test_cli_contrast(capsys):
+    assert tc.main(["contrast", "#555555", "#ffffff"]) == 0
+    assert "7.46:1, AA pass" in capsys.readouterr().out
+    assert tc.main(["contrast", "#aaa", "#fff"]) == 1
+
+
+@pytest.mark.parametrize("mark", ["dumbbell", "range", "slope"])
+def test_more_position_marks_have_no_lie_factor(mark):
+    fs = tc.lfmax_findings({"2024": [66.0, 70.0], "2025": [71.0, 72.0]}, baseline=60, mark=mark)
+    assert [f.check for f in fs] == ["lie-factor-not-applicable"]
+    assert "NO quantitative claim" in fs[0].message

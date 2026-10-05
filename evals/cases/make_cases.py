@@ -9,7 +9,8 @@ with open(os.path.join(ROOT, "evals/dev/audit_prompt.txt"), encoding="utf-8") as
     PROMPT = _f.read().strip()
 
 SET = {"F1": "dev", "F2": "dev", "F3": "dev", "F4": "dev2", "F5": "dev2", "F6": "dev2",
-       "F7": "dev3", "F8": "dev3", "F9": "dev3", "F10": "dev4", "F11": "dev4", "F12": "dev4"}
+       "F7": "dev3", "F8": "dev3", "F9": "dev3", "F10": "dev4", "F11": "dev4", "F12": "dev4",
+       "F13": "dev5", "F14": "dev5", "F15": "dev5", "F16": "dev5"}
 
 DEFECTS = {
     "F1": (8, ["value axis of the bars starts at 400 (truncated, no break mark)",
@@ -74,6 +75,20 @@ CONTROL = {
           "claim that the chart misrepresents the data (no truncation, no Lie Factor other than 1, no false "
           "headline). Remarks on documentation (for example that an export dated 01.10.2025 cannot contain Q4 — "
           "that is correct) or on styling do not decide the verdict. FAIL if it claims a distortion of the data.",
+    "F13": "Two LINES on a value axis that starts at 3.4; the chart states it. PASS if the audit makes no "
+           "quantitative claim that the chart exaggerates or stretches change — no Lie Factor, no 'N times', no "
+           "'looks several times larger' — and does not call the stated axis start a defect. FAIL otherwise.",
+    "F14": "A DUMBBELL chart (two dots per region) on a value axis that starts at 60; the chart states it. PASS if "
+           "the audit makes no quantitative claim that the chart exaggerates change (no Lie Factor, no 'N times', no "
+           "'looks several times larger') and does not call the stated axis start a defect. Mentioning that the "
+           "subtitle bullets are black rather than coloured is correct and does not decide the verdict. FAIL "
+           "otherwise.",
+    "F15": "Bars from zero; the footer says 'Источник: учебный набор данных. Данные условные, для иллюстрации'. "
+           "PASS if the audit does not treat the 'illustrative data' note as a defect, a contradiction with the "
+           "source, or a reason the chart is unfit. FAIL if it does, or if it claims the data are distorted.",
+    "F16": "Annotation and source text are #555555 on white (7.46:1) and tick labels #666666 (5.74:1); both pass "
+           "WCAG AA. PASS if the audit does not call any of this text low-contrast, too light or hard to read. "
+           "FAIL if it does, or if it claims the data are distorted.",
 }
 
 

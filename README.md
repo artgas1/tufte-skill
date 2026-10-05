@@ -39,6 +39,7 @@ script before rendering.
 | `lf --bound [--baseline B --axis-max T \| --encoding radius]` | When values are unreadable: LF ≥ T/(T−B) for bars from a non-zero baseline (for bars LF = v/(v−B), v the smaller value); LF ≥ 2 when linear size ∝ value; otherwise "cannot be computed" |
 | `blobs chart.png` | Measures coloured shapes (circles, icons, bubbles) in pixels |
 | `scaling --values … --sizes …` | Fits the rule that maps values to measured sizes (radius ∝ value vs area ∝ value), robust to anti-aliasing on small shapes, and gives the LF for smallest→largest |
+| `contrast FG BG [--size large]` | WCAG 2.x contrast ratio of a text colour on its background with AA/AAA verdicts; the skill makes no contrast claim without it |
 | `time LABEL...` | Time labels drawn evenly but uneven in time; missing periods |
 | `image chart.png` | What pixels can tell: aspect ratio, colour-coded axes, colour sets of repeated panels. Says plainly that integrity cannot be computed from pixels |
 | `figure plot.py` | Runs a matplotlib script (show/close disabled) and checks bar baselines (with Lie Factor per series and chart-wide; downgraded to a note when the chart's text labels the truncation), dual-axis colour swaps, one category in two colours, time spacing, pies (count, explode, labels summing to 100), dark or on-top grid, 3-D, smoothing, fills to arbitrary levels, icons scaled in both dimensions, shouting or causal titles, false precision, aspect and banking |
@@ -49,7 +50,7 @@ script before rendering.
 Several commands run in one process with `--then`
 (`image chart.png --then lf --data 410 520 --baseline 400`).
 
-Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (56 tests) — every check has a
+Tests: `python3 -m pytest skills/tufte/scripts/test_tufte_check.py` (63 tests) — every check has a
 negative control (silent on a clean chart, fires on a broken one). Lint: `ruff check .` and
 `pyright skills/tufte/scripts evals` are clean.
 
@@ -70,7 +71,7 @@ or in `.claude/settings.json`:
 }
 ```
 
-To pin a release, add `"ref": "tufte-skill--v1.2.0"` (or another release tag) next to `"repo"`. Settings alone register
+To pin a release, add `"ref": "tufte-skill--v1.3.0"` (or another release tag) next to `"repo"`. Settings alone register
 the marketplace; run `claude plugin install tufte-skill@tufte-skill` once to install the plugin.
 
 **As a plain skill**: copy `skills/tufte/` to `~/.claude/skills/tufte/`.
@@ -176,7 +177,8 @@ the same audit prompt, a scaffold that copies the chart into the workspace, an L
 planted defects, a regex grader for the reference Lie Factor where there is one, a control grader
 on the two clean charts, an "one LF" grader on F10 and F11, and `skill-fired` / `tool-ran` as
 plugin-fired indicators. The eval's sandbox cannot read a Python installed under your home directory
-(pyenv, uv, conda), so put one inside the plugin directory and first on `PATH`:
+(pyenv, uv, conda) or a symlink that points outside the plugin, so create a real one inside the
+plugin directory and put it first on `PATH`:
 ```
 /usr/bin/python3 -m venv .venv-eval && .venv-eval/bin/pip install numpy matplotlib
 PATH="$PWD/.venv-eval/bin:$PATH" claude plugin eval . --scaffold --allow-tools Write 'Bash(python3:*)' --judge-model sonnet
@@ -375,9 +377,64 @@ passed all five graders (one LF of 9.00). The remaining cases were not re-run wi
 budget. Pass/fail of the first pass: defects 9/9, F11 "no LF on lines" passed, F9 control passed, F6
 control failed (the audit called the disclosed truncation its "main problem").
 
-**Held-out acceptance of 1.2:** pending at the time of this commit.
+**Held-out acceptance of 1.2: passed on Opus; on Sonnet three kinds of false statements on clean
+controls remained.** Passed on both models: LF for truncated lengths 100% (1.0: 42%, 1.1: 88%), radius
+and area encodings 100%, "cannot be computed" 3/3, swapped axis colours 3/3, cost ×1.09–1.16 of no skill,
+auto-loading 66/66. Sonnet's false statements on clean controls: (1) on position encodings with a
+labelled truncated axis the script said "not applicable", yet the audit described a distortion in words
+("the 3.4–4.8 axis stretches the changes about 2.9 times"); (2) an "illustrative data" note was called a
+contradiction with the source; (3) #555 text on white was judged insufficient by eye (it is 7.46:1). 1.3
+addresses these.
+
+## Version 1.3
+
+**What changed.**
+- **No distortion estimate for position encodings, in numbers or in words.** The procedure forbids any
+  quantitative claim of exaggeration for lines, dots, scatter, slope and dumbbell charts; a labelled axis
+  start on them is not a finding, an unlabelled one is a single "axis start not marked" note. `dumbbell`
+  and `range` join the position marks of `lf`/`lfmax`, and the "not applicable" message says outright:
+  no number, no "N times".
+- **Disclosures.** "Illustrative / example data" next to a source line is documentation, not a
+  contradiction with the source — now stated with an example.
+- **`contrast FG BG`.** WCAG 2.x ratio with AA/AAA verdicts for normal and large text; the procedure
+  allows a contrast claim only from its output and none when the colours are known only from an image.
+
+**Tests.** 63, seven of them new for 1.3; all seven fail against the 1.2 script (contrast values
+#555/#fff 7.46 → AA pass, #aaa/#fff 2.32 → fail, the 4.5 threshold at #767676/#777777, input formats,
+the CLI, and three position marks).
+
+**Development check** (`evals/dev5/`: four clean controls written before rendering — F13 two lines on an
+axis from 3.4, F14 a dumbbell on an axis from 60, both with the start stated; F15 bars with «Данные
+условные, для иллюстрации»; F16 grey #555/#666 text):
+
+| False statements of the three classes | runs | position claims (F13, F14) | "illustrative" as a defect (F15) | contrast misjudged (F16 and others) |
+|---|---|---|---|---|
+| 1.3, Sonnet | 12 | 0 | 0 | 0 |
+| 1.3, Opus | 4 | 0 | 0 | 0 |
+| 1.2, Sonnet | 8 | 1 («63→70 выглядит как рост в несколько раз») | 0 | 1 (#555 footnote «плохо читается») |
+| 1.0, Sonnet | 4 | 0 | 0 | 0 |
+
+Small numbers: 1.2 produced two such statements in eight runs here, so "0 of 12" for 1.3 is consistent
+with the fix but does not prove it. The "illustrative" class did not reproduce in this set. One run of
+1.2 called the orange label on F13 low-contrast; that is correct (#d95f02 on white is 3.76:1) and is
+not counted.
+
+**`claude plugin eval` regression on 1.3** (with-skill arm, 1 run per case, Sonnet; F1, F4, F5, F7,
+F11, F12): all graders passed — LF 41, 9.00 (radius), "cannot be computed", 9.00 (several series), no LF
+on lines, 18.14 (minimum in the middle). F4 first failed because the virtualenv was a symlink to a
+directory outside the plugin, which the sandbox blocks; with a real virtualenv inside the plugin it
+passed.
+
+**Held-out acceptance of 1.3:** pending at the time of this commit.
 
 ## Changelog
+
+**1.3.0**
+- No quantitative distortion claim, in numbers or words, for position encodings (lines, dots, scatter,
+  slope, dumbbell); `dumbbell` and `range` added to the position marks.
+- "Illustrative data" next to a source is documentation, not a contradiction — rule with an example.
+- `contrast FG BG`: WCAG 2.x ratio with AA/AAA verdicts; contrast claims only from it.
+- `evals/dev5/` (four clean controls) and plugin-eval cases F13–F16.
 
 **1.2.0**
 - One Lie Factor per encoding: `scaling` is the number to quote for shapes; `lf` chained with

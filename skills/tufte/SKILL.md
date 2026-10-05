@@ -41,8 +41,9 @@ python3 /abs/path/to/skill/scripts/tufte_check.py image chart.png --then lf --da
 | `figure plot.py` | Runs a matplotlib script (show/close disabled) and checks every figure: bar baselines with Lie Factor (per series and chart-wide), dual-axis colours, category colours across panels, time spacing, pies, grid, 3-D, smoothing, area fills, icon scaling, titles. |
 | `spec chart.json` | Vega-Lite spec or Plotly figure JSON: the same checks where the spec allows. |
 | `lf --data A B --baseline X --mark bar` | Lie Factor from two values you read (`--mark line`/`point` answers "not applicable"). `--encoding both-dims`/`radius` when linear size ∝ value, `volume` for 3-D; `--measured D1 D2 --measure diameter` for sizes measured in pixels. |
-| `lfmax --mark bar --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart Lie Factor — the strongest distortion over every pair of marks, across series too — plus each series' own LF. `--mark line`/`point` answers "not applicable". |
+| `lfmax --mark bar --series NAME=v1,v2,… --series … --baseline X` | Several series on one axis: the chart Lie Factor — the strongest distortion over every pair of marks, across series too — plus each series' own LF. `--mark line`/`point`/`dumbbell` answers "not applicable". |
 | `lf --bound …` | Values unreadable: `--baseline B --axis-max T` gives LF ≥ T/(T−B) for bars from B; `--encoding radius` gives LF ≥ 2, but only when you know linear size ∝ value (a legend says so) — growing width and height alone do not prove it; bare `--bound` tells you to report "cannot be computed". |
+| `contrast FG BG [--size large]` | WCAG 2.x contrast ratio of a text colour on its background, with AA/AAA verdicts. The only basis for a contrast claim. |
 | `time L1 L2 …` | Are labels drawn evenly also even in time? `--positions` if the spacing is not even. |
 
 An ERROR from `figure`/`spec` is computed from the chart's own objects — report it (check it
@@ -101,10 +102,13 @@ Three rules make the reading trustworthy:
     for bars, `lfmax` (several series) or `lf`. If you ran two methods for the same marks, quote one —
     `scaling` beats `lf --measured` and an assumed `--encoding radius` — and say in one clause why. A
     call that chains `scaling` with `lf` prints the `lf` result as a cross-check: do not quote it.
-  - **Lines and points: no LF.** A line, a dot plot, a scatter or a slope chart encodes by position;
-    a value axis that starts above zero moves the marks but inflates no drawn magnitude. Write "LF not
-    applicable (position encoding)" and state no LF, no "N× exaggerated". A labelled start is a
-    disclosed choice; an unlabelled one is at most a Labels note.
+  - **Lines and points: no distortion estimate at all.** A line, a dot plot, a scatter, a slope chart
+    or a dumbbell encodes by position; a value axis that starts above zero moves the marks but
+    inflates no drawn magnitude. Write "LF not applicable (position encoding)" and make **no
+    quantitative claim about distortion — neither a number nor words**: not "the 3.4–4.8 axis
+    stretches the changes about 2.9 times", not "growth looks several times larger", not "the slope
+    is exaggerated". On these charts a labelled axis start is normal and is not a finding. An
+    unlabelled start is one Labels note, "axis start not marked", with no figures attached.
   - **Truncated bars:** `lf --data V1 V2 --baseline B --mark bar`. For bars LF = v/(v − B) with v
     the smaller value, so the exact value of the larger bar barely matters.
   - **Several series on one truncated axis** (bars, lollipops, areas to a baseline): readers compare
@@ -127,6 +131,10 @@ Three rules make the reading trustworthy:
   silently missing period, is a finding.
 - **Every other number you state** (growth multiples, sums of percentages, differences): compute
   it, do not estimate it. Percent labels of one pie must sum to 100.
+- **Text contrast:** a claim that text is too light, low-contrast or hard to read needs `contrast
+  FG BG` (WCAG 2.x ratio; AA needs 4.5:1 for normal text, 3:1 for large). Quote its line. Grey text
+  often passes: #555555 on white is 7.46:1. Colours come from the source code or spec; with only an
+  image you do not know them exactly, so make no contrast claim.
 
 ### 4. Judge with the rubric
 List only rows that actually fail. Page numbers point to `references/canon.md`.
@@ -136,8 +144,10 @@ List only rows that actually fail. Page numbers point to `references/canon.md`.
   distortion (VDQI p. 56). Examples:
   - an axis that starts above zero with a break mark or a note ("axis starts at 400");
   - a labelled log scale;
-  - "illustrative / hypothetical data" or "данные условные" — this is a disclosure and counts
-    as documentation;
+  - "illustrative / hypothetical / example data", "данные условные", "для иллюстрации" — a
+    disclosure that counts as documentation. It does not contradict the source line next to it: a
+    footer "Источник: учебный набор. Данные условные" is complete, consistent documentation, not
+    "a contradiction with the source" and not a reason the chart is unfit;
   - a stated deflator or a stated sampling note.
 
   At most mention them as acknowledged choices (with the `lf` output for reference), never as

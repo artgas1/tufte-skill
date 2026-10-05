@@ -10,6 +10,7 @@ Subcommands
   image   What a PNG/JPG alone can tell (aspect, axis-label colours, colour sets per half).
   blobs   Measure coloured shapes in a PNG/JPG (circles, icons): size in pixels.
   scaling Fit the rule that maps values to shape sizes (radius vs area) and give the Lie Factor.
+  contrast WCAG 2.x contrast ratio of a text colour on its background, with AA/AAA verdicts.
   figure  Run a matplotlib script under the Agg backend and inspect every figure it builds.
   spec    Inspect a Vega-Lite spec or a Plotly figure JSON.
 
@@ -229,11 +230,13 @@ def lf_bound_findings(baseline: float | None = None, axis_max: float | None = No
 # Marks whose length or area from a baseline encodes the value: a Lie Factor applies. Lines and points
 # encode by position, so a truncated value axis moves them but does not inflate any drawn magnitude.
 LENGTH_MARKS = ("bar", "column", "lollipop", "area")
-POSITION_MARKS = ("line", "point", "dot", "scatter", "slope")
+POSITION_MARKS = ("line", "point", "dot", "scatter", "slope", "dumbbell", "range")
 NOT_APPLICABLE = ("Lie Factor not applicable (position encoding): {mark}s encode values by position, not by length "
                   "or area from a baseline, so a truncated value axis does not inflate a drawn magnitude. "
-                  "Report: 'LF not applicable (position encoding)'. If the axis start is labelled, it is a disclosed "
-                  "choice, not a defect.")
+                  "Report: 'LF not applicable (position encoding)' and make NO quantitative claim about distortion — "
+                  "no number and no words such as 'stretches changes N times' or 'looks several times larger'. "
+                  "A labelled axis start is a disclosed choice, not a defect; an unlabelled one is a labelling note "
+                  "('axis start not marked'), without figures.")
 
 
 def position_mark_findings(mark: str) -> list[Finding]:
@@ -316,6 +319,63 @@ def lfmax_findings(series: dict[str, list[float]], baseline: float | None = None
                                "(supporting detail; the chart LF above is the headline number)",
                                data={"series": name, "lie_factor": round(slf, 3)}))
     return out
+
+
+# ----------------------------------------------------------------------------- text contrast
+
+WCAG_AA, WCAG_AAA, WCAG_AA_LARGE, WCAG_AAA_LARGE = 4.5, 7.0, 3.0, 4.5   # WCAG 2.x, 1.4.3 and 1.4.6
+
+
+def parse_colour(text: str) -> tuple[float, float, float]:
+    """'#555', '#555555', '555555', 'rgb(85,85,85)', 'white'/'black', or any matplotlib colour name."""
+    t = text.strip().lower()
+    m = re.fullmatch(r"rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)", t)
+    if m:
+        vals = [int(x) for x in m.groups()]
+        if max(vals) > 255:
+            raise ValueError(f"colour {text!r}: rgb components must be 0–255")
+        return (vals[0] / 255, vals[1] / 255, vals[2] / 255)
+    h = t.lstrip("#")
+    if re.fullmatch(r"[0-9a-f]{3}|[0-9a-f]{6}", h):
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        return (int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255)
+    named = {"white": (1.0, 1.0, 1.0), "black": (0.0, 0.0, 0.0)}
+    if t in named:
+        return named[t]
+    try:
+        from matplotlib.colors import to_rgb
+        r, g, b = to_rgb(t)
+        return (float(r), float(g), float(b))
+    except (ImportError, ValueError):
+        raise ValueError(f"colour {text!r} not understood; use #rrggbb") from None
+
+
+def relative_luminance(rgb: tuple[float, float, float]) -> float:
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (lin(c) for c in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast_findings(fg: str, bg: str, size: str = "normal") -> list[Finding]:
+    """WCAG 2.x contrast ratio of text colour `fg` on background `bg`, with the AA/AAA verdicts."""
+    l1, l2 = relative_luminance(parse_colour(fg)), relative_luminance(parse_colour(bg))
+    ratio = (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+    aa_n, aaa_n = ratio >= WCAG_AA, ratio >= WCAG_AAA          # WCAG: compare unrounded ratios
+    aa_l, aaa_l = ratio >= WCAG_AA_LARGE, ratio >= WCAG_AAA_LARGE
+    verdict = (f"normal text: AA {'PASS' if aa_n else 'FAIL'} (≥4.5), AAA {'PASS' if aaa_n else 'FAIL'} (≥7); "
+               f"large text (≥18 pt, or ≥14 pt bold): AA {'PASS' if aa_l else 'FAIL'} (≥3), "
+               f"AAA {'PASS' if aaa_l else 'FAIL'} (≥4.5)")
+    passes = aa_l if size == "large" else aa_n
+    level = "AA pass" if passes else "AA fail"
+    msg = (f"{hexc(parse_colour(fg))} on {hexc(parse_colour(bg))}: contrast {ratio:.2f}:1 (WCAG 2.x). {verdict}. "
+           f"Quote this result as: contrast {ratio:.2f}:1, {level} for {size} text")
+    sev = "INFO" if passes else "ERROR"
+    if passes:
+        msg += ". Do not call this text low-contrast"
+    return [Finding(sev, "contrast", msg + ".", data={"ratio": round(ratio, 3), "aa": passes, "size": size,
+                                                      "aa_normal": aa_n, "aaa_normal": aaa_n})]
 
 
 # ----------------------------------------------------------------------------- time spacing
@@ -1457,6 +1517,12 @@ def main(argv=None, cross_check: bool = False) -> int:
                    help="what is drawn. bar|column|lollipop|area: length from a baseline, LF applies. "
                         "line|point|dot|scatter|slope: position encoding, LF does not apply")
 
+    q = sub.add_parser("contrast", help="WCAG 2.x contrast ratio of a text colour on a background, AA/AAA")
+    q.add_argument("fg", help="text colour, e.g. #555555")
+    q.add_argument("bg", help="background colour, e.g. #ffffff")
+    q.add_argument("--size", choices=("normal", "large"), default="normal",
+                   help="large = at least 18 pt, or 14 pt bold")
+
     q = sub.add_parser("scaling", help="which rule maps values to shape sizes? LF for smallest→largest")
     q.add_argument("--values", nargs="+", type=float, required=True)
     q.add_argument("--sizes", nargs="+", type=float, required=True, help="measured sizes, same order as --values")
@@ -1494,6 +1560,8 @@ def main(argv=None, cross_check: bool = False) -> int:
                                  cross_check=cross_check and size_encoding)
         elif a.cmd == "lfmax":
             fs = lfmax_findings(parse_series(a.series), a.baseline, a.encoding, a.mark)
+        elif a.cmd == "contrast":
+            fs = contrast_findings(a.fg, a.bg, a.size)
         elif a.cmd == "scaling":
             fs = scaling_findings(a.values, a.sizes, a.measure)
         elif a.cmd == "time":
